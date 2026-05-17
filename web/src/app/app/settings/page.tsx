@@ -14,6 +14,11 @@ import { requestNotificationPermission } from "@/lib/notifications";
 import { WritingVoicePicker } from "@/components/WritingVoicePicker";
 import { HumanOnlyBanner } from "@/components/HumanOnlyBanner";
 import type { WritingPreferences } from "@/lib/writingVoice";
+import {
+  COMMON_TIMEZONES,
+  detectDeviceTimezone,
+  timezoneLabel,
+} from "@/lib/timezones";
 
 export default function SettingsPage() {
   const [topics, setTopics] = useState<TopicId[]>([]);
@@ -104,9 +109,42 @@ export default function SettingsPage() {
 
       <section className="space-y-4">
         <h2 className="text-sm font-medium uppercase tracking-wide text-ink-muted">
+          Timezone
+        </h2>
+        <p className="text-sm text-ink-muted">
+          Nudge times and &quot;today&quot; use this zone — not your server or
+          UTC.
+        </p>
+        <label className="block">
+          <span className="sr-only">Timezone</span>
+          <select
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+            className="w-full rounded-xl border border-ink-border bg-ink-surface px-4 py-3 text-ink-fg"
+          >
+            {!COMMON_TIMEZONES.some((z) => z.value === timezone) && (
+              <option value={timezone}>{timezoneLabel(timezone)}</option>
+            )}
+            {COMMON_TIMEZONES.map((z) => (
+              <option key={z.value} value={z.value}>
+                {z.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={() => setTimezone(detectDeviceTimezone())}
+          className="text-sm text-ink-accent hover:underline"
+        >
+          Use device timezone ({detectDeviceTimezone()})
+        </button>
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-sm font-medium uppercase tracking-wide text-ink-muted">
           Nudges
         </h2>
-        <p className="text-xs text-ink-muted">Timezone: {timezone}</p>
         <NudgeScheduleEditor config={nudgeConfig} onChange={setNudgeConfig} />
         <label className="flex items-center gap-3 cursor-pointer">
           <input
