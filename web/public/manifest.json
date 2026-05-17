@@ -1,0 +1,10 @@
+{
+  "name": "Inkwell",
+  "short_name": "Inkwell",
+  "description": "Private writing prompts — your words only",
+  "start_url": "/app",
+  "display": "standalone",
+  "background_color": "#f6f3ed",
+  "theme_color": "#f6f3ed",
+  "icons": []
+}
