@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Inkwell">
+  <rect width="512" height="512" rx="112" fill="#f6f3ed"/>
+  <path
+    d="M256 88c-20 0-36 24-36 56 0 30 36 80 36 80s36-50 36-80c0-32-16-56-36-56z"
+    fill="#9a7b5c"
+  />
+  <path
+    d="M120 292h272"
+    fill="none"
+    stroke="#2a2622"
+    stroke-width="22"
+    stroke-linecap="round"
+  />
+  <path
+    d="M148 292c0 58 48 108 108 108s108-50 108-108H148z"
+    fill="#9a7b5c"
+    fill-opacity="0.22"
+  />
+  <ellipse cx="256" cy="292" rx="104" ry="16" fill="#9a7b5c" fill-opacity="0.5"/>
+</svg>

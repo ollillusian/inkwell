@@ -19,6 +19,18 @@ export const metadata: Metadata = {
   description:
     "Gentle writing prompts, three times a day. Private. Human. No AI.",
   manifest: "/manifest.json",
+  icons: {
+    icon: [
+      { url: "/icons/icon.svg", type: "image/svg+xml" },
+      { url: "/icon", sizes: "32x32", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-icon", sizes: "180x180", type: "image/png" }],
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Inkwell",
+    statusBarStyle: "default",
+  },
 };
 
 export const viewport: Viewport = {
