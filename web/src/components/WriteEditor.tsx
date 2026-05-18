@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { NudgeKind } from "@/lib/nudges";
@@ -14,7 +14,10 @@ type Props = {
   entryId?: string;
   initialBody?: string;
   markNudgeFired?: boolean;
+  deliveryDate?: string;
 };
+
+type DraftStatus = "idle" | "saving" | "saved" | "error";
 
 export function WriteEditor({
   promptText,
@@ -24,35 +27,124 @@ export function WriteEditor({
   entryId,
   initialBody = "",
   markNudgeFired = nudgeKind === "once",
+  deliveryDate,
 }: Props) {
   const [body, setBody] = useState(initialBody);
+  const [currentEntryId, setCurrentEntryId] = useState(entryId);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [draftStatus, setDraftStatus] = useState<DraftStatus>(
+    initialBody ? "saved" : "idle"
+  );
   const router = useRouter();
+  const lastSavedBody = useRef(initialBody);
+  const saveVersion = useRef(0);
+
+  const persistEntry = useCallback(
+    async (bodyToSave: string, isDraft: boolean): Promise<string | null> => {
+      if (!bodyToSave.trim() && !currentEntryId) return null;
+
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return null;
+
+      const payload = {
+        prompt_text: promptText,
+        prompt_slot: nudgeId,
+        body: bodyToSave,
+        topics_snapshot: topicsSnapshot,
+        is_draft: isDraft,
+      };
+
+      const { data, error } = currentEntryId
+        ? await supabase
+            .from("entries")
+            .update(payload)
+            .eq("id", currentEntryId)
+            .eq("user_id", user.id)
+            .select("id")
+            .single()
+        : await supabase
+            .from("entries")
+            .insert({
+              ...payload,
+              user_id: user.id,
+            })
+            .select("id")
+            .single();
+
+      if (error) throw error;
+      const savedEntryId = data?.id as string | undefined;
+      if (!savedEntryId) return null;
+
+      setCurrentEntryId(savedEntryId);
+
+      if (deliveryDate) {
+        await supabase
+          .from("prompt_deliveries")
+          .update({ entry_id: savedEntryId })
+          .eq("user_id", user.id)
+          .eq("delivery_date", deliveryDate)
+          .eq("prompt_slot", nudgeId);
+      }
+
+      return savedEntryId;
+    },
+    [currentEntryId, deliveryDate, nudgeId, promptText, topicsSnapshot]
+  );
+
+  useEffect(() => {
+    if (body === lastSavedBody.current) return;
+    if (!body.trim() && !currentEntryId) {
+      setDraftStatus("idle");
+      return;
+    }
+
+    const version = ++saveVersion.current;
+    setDraftStatus("saving");
+
+    const timeout = window.setTimeout(async () => {
+      try {
+        if (saveVersion.current !== version) return;
+        await persistEntry(body, true);
+        if (saveVersion.current === version) {
+          lastSavedBody.current = body;
+          setDraftStatus("saved");
+        }
+      } catch (error) {
+        console.error("[inkwell] draft autosave failed:", error);
+        if (saveVersion.current === version) setDraftStatus("error");
+      }
+    }, 900);
+
+    return () => window.clearTimeout(timeout);
+  }, [body, currentEntryId, persistEntry]);
 
   async function save() {
     if (!body.trim()) return;
+    saveVersion.current += 1;
     setSaving(true);
+    setDraftStatus("saving");
     const supabase = createClient();
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) {
+      setSaving(false);
+      setDraftStatus("error");
+      return;
+    }
 
-    if (entryId) {
-      await supabase
-        .from("entries")
-        .update({ body: body.trim() })
-        .eq("id", entryId)
-        .eq("user_id", user.id);
-    } else {
-      await supabase.from("entries").insert({
-        user_id: user.id,
-        prompt_text: promptText,
-        prompt_slot: nudgeId,
-        body: body.trim(),
-        topics_snapshot: topicsSnapshot,
-      });
+    let savedEntryId: string | null = null;
+    try {
+      savedEntryId = await persistEntry(body.trim(), false);
+    } catch (error) {
+      console.error("[inkwell] entry save failed:", error);
+      setSaving(false);
+      setDraftStatus("error");
+      return;
     }
 
     if (markNudgeFired) {
@@ -70,8 +162,16 @@ export function WriteEditor({
       }
     }
 
+    if (!savedEntryId) {
+      setSaving(false);
+      setDraftStatus("error");
+      return;
+    }
+
+    lastSavedBody.current = body.trim();
     setSaving(false);
     setSaved(true);
+    setDraftStatus("saved");
     router.push("/app/journal");
     router.refresh();
   }
@@ -93,7 +193,14 @@ export function WriteEditor({
         autoFocus
       />
       <p className="text-xs text-ink-muted">
-        {body.length} characters · stored privately in your account
+        {body.length} characters ·{" "}
+        {draftStatus === "saving"
+          ? "saving draft..."
+          : draftStatus === "saved"
+            ? "draft saved"
+            : draftStatus === "error"
+              ? "autosave needs a retry"
+              : "stored privately in your account"}
       </p>
       <button
         type="button"

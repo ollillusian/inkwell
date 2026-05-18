@@ -27,4 +27,7 @@ export type Entry = {
   body: string;
   topics_snapshot: string[];
   written_at: string;
+  created_at?: string;
+  updated_at?: string;
+  is_draft: boolean;
 };
