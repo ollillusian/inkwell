@@ -37,12 +37,14 @@ export function WriteEditor({
     initialBody ? "saved" : "idle"
   );
   const router = useRouter();
+  const currentEntryIdRef = useRef(entryId);
   const lastSavedBody = useRef(initialBody);
   const saveVersion = useRef(0);
 
   const persistEntry = useCallback(
     async (bodyToSave: string, isDraft: boolean): Promise<string | null> => {
-      if (!bodyToSave.trim() && !currentEntryId) return null;
+      const existingEntryId = currentEntryIdRef.current;
+      if (!bodyToSave.trim() && !existingEntryId) return null;
 
       const supabase = createClient();
       const {
@@ -58,11 +60,11 @@ export function WriteEditor({
         is_draft: isDraft,
       };
 
-      const { data, error } = currentEntryId
+      const { data, error } = existingEntryId
         ? await supabase
             .from("entries")
             .update(payload)
-            .eq("id", currentEntryId)
+            .eq("id", existingEntryId)
             .eq("user_id", user.id)
             .select("id")
             .single()
@@ -79,6 +81,7 @@ export function WriteEditor({
       const savedEntryId = data?.id as string | undefined;
       if (!savedEntryId) return null;
 
+      currentEntryIdRef.current = savedEntryId;
       setCurrentEntryId(savedEntryId);
 
       if (deliveryDate) {
@@ -92,18 +95,16 @@ export function WriteEditor({
 
       return savedEntryId;
     },
-    [currentEntryId, deliveryDate, nudgeId, promptText, topicsSnapshot]
+    [deliveryDate, nudgeId, promptText, topicsSnapshot]
   );
 
   useEffect(() => {
     if (body === lastSavedBody.current) return;
     if (!body.trim() && !currentEntryId) {
-      setDraftStatus("idle");
       return;
     }
 
     const version = ++saveVersion.current;
-    setDraftStatus("saving");
 
     const timeout = window.setTimeout(async () => {
       try {
@@ -185,8 +186,10 @@ export function WriteEditor({
       <textarea
         value={body}
         onChange={(e) => {
-          setBody(e.target.value);
+          const nextBody = e.target.value;
+          setBody(nextBody);
           setSaved(false);
+          setDraftStatus(nextBody.trim() || currentEntryId ? "saving" : "idle");
         }}
         placeholder="Start anywhere. No one else will read this unless you choose to share."
         className="w-full min-h-[280px] resize-y rounded-2xl border border-ink-border bg-ink-surface/50 px-5 py-4 text-lg leading-relaxed text-ink-fg placeholder:text-ink-muted/40 focus:outline-none focus:ring-2 focus:ring-ink-accent/30 font-serif"
