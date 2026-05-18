@@ -12,7 +12,7 @@ export const TONE_OPTIONS: Record<
 > = {
   dark: {
     label: "Dark & honest",
-    description: "Shadows, grief, anger, the unsaid — no forced brightness",
+    description: "Shadows, grief, anger, and the unsaid with no forced brightness",
   },
   raw: {
     label: "Raw & unfiltered",
@@ -20,7 +20,7 @@ export const TONE_OPTIONS: Record<
   },
   hopeful: {
     label: "Hopeful",
-    description: "Light without toxic positivity — real reasons to keep going",
+    description: "Light without toxic positivity and real reasons to keep going",
   },
   gentle: {
     label: "Gentle",
@@ -32,7 +32,7 @@ export const TONE_OPTIONS: Record<
   },
   poetic: {
     label: "Poetic",
-    description: "Image, rhythm, metaphor — still your words, not AI poetry",
+    description: "Image, rhythm, and metaphor while keeping your words, not AI poetry",
   },
 };
 
@@ -64,12 +64,12 @@ export function systemPromptForVoice(prefs: WritingPreferences): string {
 
   return `You are Inkwell, a writing companion for private journaling.
 
-Your only job: output ONE short writing prompt (1–3 sentences) the user will answer themselves.
+Your only job: output ONE short writing prompt as a single sentence the user will answer themselves.
 
 Rules:
 - Match their chosen themes, moment of day, and especially their writing voice below.
-- ${dark || raw ? "They want depth, shadow, honesty — do NOT default to cheerful or therapeutic platitudes." : "Warm and specific, not clinical."}
+- ${dark || raw ? "They want depth, shadow, and honesty; do NOT default to cheerful or therapeutic platitudes." : "Warm and specific, not clinical."}
 - Do NOT write their journal entry or a sample answer.
 - Do NOT mention AI or ChatGPT.
-- Output ONLY the prompt text.`;
+- Output ONLY the prompt text as a single sentence with no em dashes.`;
 }

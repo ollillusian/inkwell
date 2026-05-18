@@ -14,6 +14,20 @@ function openaiClient(): OpenAI | null {
   return new OpenAI({ apiKey: key });
 }
 
+function normalizeGeneratedPrompt(text: string): string {
+  return text
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .replace(/\s*[\u2014\u2013]\s*/g, ", ")
+    .replace(/([.!?])\s+([A-Z])/g, (_match, mark: string, next: string) => {
+      const joiner = mark === "?" ? ";" : ",";
+      const normalizedNext = next === "I" ? next : next.toLowerCase();
+      return `${joiner} ${normalizedNext}`;
+    })
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export async function generatePromptWithLLM(
   topics: TopicId[],
   context: {
@@ -30,7 +44,7 @@ export async function generatePromptWithLLM(
 
   const active: TopicId[] = topics.length > 0 ? topics : ["free"];
   const themes = active
-    .map((id) => `${TOPICS[id].label} — ${TOPICS[id].description}`)
+    .map((id) => `${TOPICS[id].label}: ${TOPICS[id].description}`)
     .join("\n");
 
   const hint =
@@ -43,9 +57,9 @@ export async function generatePromptWithLLM(
 
   const kindNote =
     context.nudgeKind === "once"
-      ? "One-time nudge — singular, not a daily habit."
+      ? "One-time nudge, singular and not a daily habit."
       : context.topicHint === "travel"
-        ? "Travel — mid-day energy, not bedtime wind-down."
+        ? "Travel, midday energy and not bedtime wind-down."
         : `Scheduled for around ${context.scheduledAtLabel} (user's local time).`;
 
   try {
@@ -64,16 +78,16 @@ ${kindNote}${hint}
 Themes they chose in onboarding:
 ${themes}
 
-${voiceBrief || "No specific voice set — keep prompts honest and inviting."}
+${voiceBrief || "No specific voice set, keep prompts honest and inviting."}
 
-Write one prompt that fits their voice (e.g. if they want dark writing, go dark — shadows, truth, no cheerleading).`,
+Write one single-sentence prompt that fits their voice, with no em dashes.`,
         },
       ],
     });
 
     const text = response.choices[0]?.message?.content?.trim();
     if (!text || text.length < 12) return null;
-    return text.replace(/^["']|["']$/g, "");
+    return normalizeGeneratedPrompt(text);
   } catch (e) {
     console.error("[inkwell] LLM prompt generation failed:", e);
     return null;

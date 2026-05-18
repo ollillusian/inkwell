@@ -16,7 +16,7 @@ export function slotLabel(slot: PromptSlot): string {
   return SLOT_LABELS[slot];
 }
 
-/** Deterministic daily prompt — no LLM, same user+date+slot => same prompt. */
+/** Deterministic daily prompt: no LLM, same user+date+slot => same prompt. */
 export function pickPrompt(
   topics: TopicId[],
   slot: PromptSlot,

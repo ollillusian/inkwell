@@ -75,7 +75,7 @@ export function scheduleLocalReminders(
         onFire({ nudgeId: n.id, label: n.label });
         if (Notification.permission === "granted") {
           new Notification("Inkwell", {
-            body: `${n.label} — a prompt is waiting. Your words, your voice.`,
+            body: `${n.label}: a prompt is waiting. Your words, your voice.`,
             tag: id,
           });
         }

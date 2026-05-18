@@ -28,7 +28,7 @@ enum TopicId: String, CaseIterable {
         switch self {
         case .processing: return "Processing what I'm going through"
         case .gratitude: return "Noticing small good things"
-        case .free: return "Free writing — whatever comes"
+        case .free: return "Free writing, whatever comes"
         case .relationships: return "People and connection"
         case .work: return "Work and pressure"
         case .self_compassion: return "Being kinder to myself"
@@ -42,15 +42,15 @@ enum PromptEngine {
   private static let prompts: [TopicId: [PromptSlot: [String]]] = [
     .processing: [
       .morning: [
-        "What feeling is sitting closest to the surface right now? Don't explain it — just name it.",
+        "What feeling is sitting closest to the surface right now, without explaining it?",
         "If your body could speak this morning, what one sentence would it say?",
       ],
-      .midday: ["Pause. What shifted since this morning — even slightly?"],
+      .midday: ["Pause and name what shifted since this morning, even slightly."],
       .evening: ["What surprised you about today?"],
     ],
     .free: [
-      .morning: ["Start with: 'Right now I…' and don't stop for three minutes."],
-      .midday: ["Whatever you're thinking about — go there."],
+      .morning: ["Start with 'Right now I' and don't stop for three minutes."],
+      .midday: ["Go straight toward whatever you're thinking about."],
       .evening: ["Stream of consciousness until the page feels lighter."],
     ],
   ]

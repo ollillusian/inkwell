@@ -9,7 +9,7 @@
       "description": "Light anchors without toxic positivity"
     },
     "free": {
-      "label": "Free writing — whatever comes",
+      "label": "Free writing, whatever comes",
       "description": "Open pages with no agenda"
     },
     "relationships": {
@@ -34,21 +34,21 @@
     },
     "travel": {
       "label": "Travel and being elsewhere",
-      "description": "Daily prompts while you're away — mid-day, not just at night"
+      "description": "Daily prompts while you're away at midday and beyond"
     }
   },
   "slots": ["morning", "midday", "evening"],
   "prompts": {
     "processing": {
       "morning": [
-        "What feeling is sitting closest to the surface right now? Don't explain it — just name it.",
+        "What feeling is sitting closest to the surface right now, without explaining it?",
         "If your body could speak this morning, what one sentence would it say?",
         "What are you carrying that isn't yours to fix today?",
-        "Write the truth you're avoiding in one line. Then one more.",
+        "Write the truth you're avoiding in one line, then add one more line.",
         "What would 'enough for today' look like?"
       ],
       "midday": [
-        "Pause. What shifted since this morning — even slightly?",
+        "Pause and name what shifted since this morning, even slightly.",
         "What do you need that you haven't asked for?",
         "Describe this moment without judging it.",
         "What would you tell a friend in your exact situation?",
@@ -56,10 +56,10 @@
       ],
       "evening": [
         "What surprised you about today?",
-        "What do you forgive yourself for today — specifically?",
-        "Write a letter to today. It doesn't have to be kind.",
-        "What are you still holding? Where in your body do you feel it?",
-        "One thing that was hard. One thing that was real."
+        "What do you forgive yourself for today, specifically?",
+        "Write a letter to today that doesn't have to be kind.",
+        "Where in your body do you feel what you are still holding?",
+        "Name one thing that was hard and one thing that was real."
       ]
     },
     "gratitude": {
@@ -71,15 +71,15 @@
         "What is quietly good about this morning?"
       ],
       "midday": [
-        "Three tiny things — no bigger than your palm.",
+        "Name three tiny things no bigger than your palm.",
         "A moment today that wasn't perfect but was okay.",
         "Something your body did for you without being asked.",
-        "A place — real or remembered — where you felt safe.",
+        "Describe a real or remembered place where you felt safe.",
         "What went better than you expected?"
       ],
       "evening": [
         "What held you up today, even a little?",
-        "Write thank-you to something inanimate. Be serious or silly.",
+        "Write a serious or silly thank-you to something inanimate.",
         "A kindness you gave or received.",
         "What would you keep from this day if you could?",
         "Finish: 'I'm glad I noticed ___.'"
@@ -87,47 +87,47 @@
     },
     "free": {
       "morning": [
-        "Start with: 'Right now I…' and don't stop for three minutes.",
-        "List everything on your mind. No order required.",
-        "A dream fragment, a worry, a song lyric — follow whichever pulls.",
-        "Describe the light in the room. Then where your thoughts go.",
+        "Start with 'Right now I' and don't stop for three minutes.",
+        "List everything on your mind in any order.",
+        "Follow whichever pulls you most: a dream fragment, a worry, or a song lyric.",
+        "Describe the light in the room and where your thoughts go next.",
         "Write nonsense until something true appears."
       ],
       "midday": [
-        "Whatever you're thinking about — go there.",
+        "Go straight toward whatever you're thinking about.",
         "Finish sentences you started in your head today.",
         "If today were a weather report, what would it say?",
-        "Write in second person to yourself. See what changes.",
-        "No prompt. Just words."
+        "Write in second person to yourself and see what changes.",
+        "Write without a prompt, just words."
       ],
       "evening": [
         "Stream of consciousness until the page feels lighter.",
-        "What do you want to remember about today? What to forget?",
-        "Dialogue between two parts of you. No stage directions needed.",
-        "A list. A poem. A rant. Your choice.",
-        "The last thought before sleep — capture it."
+        "What do you want to remember about today and what do you want to forget?",
+        "Write dialogue between two parts of you without stage directions.",
+        "Choose a list, a poem, or a rant.",
+        "Capture the last thought before sleep."
       ]
     },
     "relationships": {
       "morning": [
-        "Who is on your mind when you wake? Write to them — unsent.",
+        "Write an unsent note to whoever is on your mind when you wake.",
         "What do you wish they understood about you?",
-        "A conversation you keep replaying. Write the ending you wanted.",
+        "Write the ending you wanted to a conversation you keep replaying.",
         "What boundary do you need today?",
-        "Name someone you miss. One memory."
+        "Name someone you miss and one memory of them."
       ],
       "midday": [
         "What did you not say in your last interaction with someone?",
         "Write appreciation for someone you haven't thanked out loud.",
         "What pattern in a relationship are you noticing?",
         "If you could ask one honest question, what would it be?",
-        "Who made you feel seen recently? What did they do?"
+        "Who made you feel seen recently, and what did they do?"
       ],
       "evening": [
-        "A relationship that changed you. One paragraph.",
-        "Forgiveness — given, withheld, or in progress.",
+        "Write one paragraph about a relationship that changed you.",
+        "Write about forgiveness given, withheld, or still in progress.",
         "What do you want more of in your connections?",
-        "Write what you're afraid to text. Don't send it here — just write.",
+        "Write what you're afraid to text without sending it.",
         "To someone who hurt you: what you needed then."
       ]
     },
@@ -140,16 +140,16 @@
         "Name the feeling before the to-do list."
       ],
       "midday": [
-        "What drained you this morning? What gave a little back?",
-        "Write the email you wish you could send. Don't send.",
-        "What are you doing out of fear vs. choice?",
-        "One win, however small. One friction.",
+        "What drained you this morning, and what gave a little back?",
+        "Write the email you wish you could send without sending it.",
+        "What are you doing out of fear rather than choice?",
+        "Name one win, however small, and one friction.",
         "What would you do if your reputation didn't matter for an hour?"
       ],
       "evening": [
-        "Leave work on the page. What are you taking home mentally?",
+        "Leave work on the page by naming what you are taking home mentally.",
         "What did you do well today that no one will praise?",
-        "Tomorrow's first step — only one.",
+        "Name only tomorrow's first step.",
         "What part of your job is still yours to enjoy, if any?",
         "Permission slip: you don't have to earn rest."
       ]
@@ -158,46 +158,46 @@
       "morning": [
         "What would you say to yourself if you were five years old and scared?",
         "One thing you're doing your best at, even if it doesn't look like it.",
-        "Replace 'I should' with 'I'm learning to' — finish three sentences.",
-        "What do you need to hear this morning? Write it as if from a friend.",
-        "Your inner critic's favorite line — answer it gently."
+        "Finish three sentences that replace 'I should' with 'I'm learning to'.",
+        "Write what you need to hear this morning as if from a friend.",
+        "Answer your inner critic's favorite line gently."
       ],
       "midday": [
-        "When did you last feel proud of yourself? Describe it.",
+        "Describe the last time you felt proud of yourself.",
         "What mistake are you still punishing yourself for?",
         "List three things your body has carried you through.",
-        "What would self-care look like in the next hour — realistically?",
-        "You are allowed to rest. What does that bring up?"
+        "What would self-care look like in the next hour, realistically?",
+        "What comes up when you remember that you are allowed to rest?"
       ],
       "evening": [
         "Three things you did today that count, including surviving.",
         "Write yourself a goodnight note.",
-        "What are you comparing yourself to? Put it in perspective.",
+        "Put what you are comparing yourself to in perspective.",
         "What would you stop apologizing for?",
-        "Tomorrow's you deserves kindness tonight. What do they need?"
+        "What does tomorrow's you need from your kindness tonight?"
       ]
     },
     "memories": {
       "morning": [
-        "A morning from another year. Where were you? Who was there?",
-        "An object that holds a story. Describe it with your hands in mind.",
-        "A voice you haven't heard in a while — what did they say?",
-        "A place you can't return to. What do you miss most?",
-        "The smell of a memory. Follow it."
+        "Describe a morning from another year, including where you were and who was there.",
+        "Describe an object that holds a story with your hands in mind.",
+        "Write what a voice you haven't heard in a while once said.",
+        "What do you miss most about a place you can't return to?",
+        "Follow the smell of a memory."
       ],
       "midday": [
         "A photograph you remember without seeing it.",
         "Write a scene from childhood in present tense.",
         "What did you believe then that you don't now?",
-        "A song tied to a person. What happens when you hear it?",
-        "Something you lost. What remains?"
+        "What happens when you hear a song tied to a person?",
+        "What remains from something you lost?"
       ],
       "evening": [
         "A goodbye you didn't get to say properly.",
-        "If you could visit one day again — which, and why?",
-        "Write to your past self. They can read it here.",
+        "Which day would you visit again, and why?",
+        "Write to your past self as if they can read it here.",
         "What from the past still needs witnessing?",
-        "A memory that makes you smile. Let it."
+        "Let yourself sit with a memory that makes you smile."
       ]
     },
     "hopes": {
@@ -205,45 +205,45 @@
         "Without a plan: what do you want more of in your life?",
         "A small hope for today only.",
         "If fear were quieter, what would you try?",
-        "Describe a ordinary good day six months from now.",
+        "Describe an ordinary good day six months from now.",
         "What are you growing toward, even slowly?"
       ],
       "midday": [
-        "One step toward something you want — tiny is fine.",
+        "Name one tiny step toward something you want.",
         "What would you start if you knew you couldn't fail?",
-        "A person you admire. What quality do you want to borrow?",
-        "Write 'I want…' ten times. Don't edit.",
+        "What quality would you borrow from a person you admire?",
+        "Write 'I want' ten times without editing.",
         "What are you curious about lately?"
       ],
       "evening": [
         "What felt possible today, even for a moment?",
         "A wish for tomorrow morning.",
         "What are you willing to disappoint to protect your peace?",
-        "Letter from future you — one paragraph of encouragement.",
-        "Before sleep: one hope. One breath."
+        "Write one encouraging paragraph from future you.",
+        "Name one hope before sleep and take one breath."
       ]
     },
     "travel": {
       "morning": [
-        "You're somewhere else right now. What feels different in your body today?",
-        "One thing you miss from home. One thing you're glad to see here.",
-        "Write a postcard you won't send — where are you, honestly?",
+        "What feels different in your body while you are somewhere else today?",
+        "Name one thing you miss from home and one thing you're glad to see here.",
+        "Write an honest postcard you won't send from where you are.",
         "What would make today away feel a little more yours?",
-        "The airport, the road, the room — describe one detail that will stick."
+        "Describe one detail from the airport, the road, or the room that will stick."
       ],
       "midday": [
-        "Pause wherever you are. What do you notice in this moment?",
+        "Pause wherever you are and name what you notice in this moment.",
         "Who or what are you carrying with you on this trip?",
-        "Something disorienting about being away — name it without fixing it.",
+        "Name something disorienting about being away without fixing it.",
         "A small ritual you can keep while traveling.",
         "If you could text home one true sentence, what would it say?"
       ],
       "evening": [
         "Before sleep in an unfamiliar place: what are you grateful for today?",
         "What surprised you about today away from your usual life?",
-        "Write yourself to sleep — where you are, what you feel.",
+        "Write yourself to sleep with where you are and what you feel.",
         "One thing to release before tomorrow's miles.",
-        "You're allowed to be tired of traveling. What do you need?"
+        "What do you need when you're allowed to be tired of traveling?"
       ]
     }
   }
