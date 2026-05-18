@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import {
   groupEntriesByLocalDay,
+  publishedEntries,
   wordCount,
 } from "@/lib/journal";
 import { formatLocalDateLong, zonedLocalToUtc } from "@/lib/datetime";
@@ -21,7 +22,7 @@ export default async function JournalPage() {
     .order("written_at", { ascending: false })
     .limit(200);
 
-  const list = (entries ?? []) as Entry[];
+  const list = publishedEntries((entries ?? []) as Entry[]);
   const { data: profile } = await supabase
     .from("profiles")
     .select("timezone")

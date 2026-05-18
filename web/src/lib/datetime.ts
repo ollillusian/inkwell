@@ -138,6 +138,24 @@ function addDaysToDateKey(dateKey: string, days: number): string {
   return `${yy}-${mm}-${dd}`;
 }
 
+/** UTC instants for a local calendar day (YYYY-MM-DD in the given zone). */
+export function localDayUtcBoundsForDateKey(
+  dateKey: string,
+  timeZone: string
+): { start: string; end: string; dateKey: string } {
+  const [y, mo, d] = dateKey.split("-").map(Number);
+  const start = zonedLocalToUtc(y, mo, d, 0, 0, timeZone);
+  const nextKey = addDaysToDateKey(dateKey, 1);
+  const [y2, mo2, d2] = nextKey.split("-").map(Number);
+  const endExclusive = zonedLocalToUtc(y2, mo2, d2, 0, 0, timeZone);
+  const end = new Date(endExclusive.getTime() - 1);
+  return {
+    dateKey,
+    start: start.toISOString(),
+    end: end.toISOString(),
+  };
+}
+
 export function localDayUtcBounds(
   timeZone: string,
   date: Date = new Date()

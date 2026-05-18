@@ -1,9 +1,4 @@
-import {
-  localDateKey,
-  localDayUtcBounds,
-  localMinutesSinceMidnight,
-  zonedLocalToUtc,
-} from "@/lib/datetime";
+import { localDateKey, localMinutesSinceMidnight } from "@/lib/datetime";
 import type { Entry } from "@/types/database";
 
 export function wordCount(text: string): number {
@@ -12,8 +7,17 @@ export function wordCount(text: string): number {
   return trimmed.split(/\s+/).length;
 }
 
+/** Saved journal entries (excludes in-progress autosave drafts). */
 export function publishedEntries(entries: Entry[]): Entry[] {
-  return entries.filter((e) => e.is_draft !== true);
+  return entries.filter((e) => !e.is_draft);
+}
+
+/** Same calendar day as the journal list uses (profile timezone). */
+export function entryLocalDateKey(
+  writtenAt: string,
+  timeZone: string
+): string {
+  return localDateKey(new Date(writtenAt), timeZone);
 }
 
 export function entriesForLocalDate(
@@ -21,23 +25,12 @@ export function entriesForLocalDate(
   dateKey: string,
   timeZone: string
 ): Entry[] {
-  const { start, end } = localDayUtcBounds(timeZone, dateKeyToDate(dateKey, timeZone));
-  const startMs = new Date(start).getTime();
-  const endMs = new Date(end).getTime();
   return publishedEntries(entries)
-    .filter((e) => {
-      const t = new Date(e.written_at).getTime();
-      return t >= startMs && t <= endMs;
-    })
+    .filter((e) => entryLocalDateKey(e.written_at, timeZone) === dateKey)
     .sort(
       (a, b) =>
         new Date(a.written_at).getTime() - new Date(b.written_at).getTime()
     );
-}
-
-function dateKeyToDate(dateKey: string, timeZone: string): Date {
-  const [y, mo, d] = dateKey.split("-").map(Number);
-  return zonedLocalToUtc(y, mo, d, 12, 0, timeZone);
 }
 
 export function groupEntriesByLocalDay(
@@ -46,7 +39,7 @@ export function groupEntriesByLocalDay(
 ): { dateKey: string; entries: Entry[] }[] {
   const map = new Map<string, Entry[]>();
   for (const entry of publishedEntries(entries)) {
-    const key = localDateKey(new Date(entry.written_at), timeZone);
+    const key = entryLocalDateKey(entry.written_at, timeZone);
     const list = map.get(key) ?? [];
     list.push(entry);
     map.set(key, list);

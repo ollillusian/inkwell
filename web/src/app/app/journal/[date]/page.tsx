@@ -4,8 +4,10 @@ import { createClient } from "@/lib/supabase/server";
 import {
   entriesForLocalDate,
   entryGraphPoints,
+  entryLocalDateKey,
   wordCount,
 } from "@/lib/journal";
+import type { Entry } from "@/types/database";
 import {
   formatLocalDateLong,
   formatWrittenAt,
@@ -15,7 +17,6 @@ import { legacyScheduleFromProfile } from "@/lib/nudges";
 import { formatOnDemandPromptLabel } from "@/lib/prompts/onDemandPrompt";
 import { EntryDayGraph } from "@/components/EntryDayGraph";
 import { DayStoryPanel } from "@/components/DayStoryPanel";
-import type { Entry } from "@/types/database";
 
 type Props = {
   params: Promise<{ date: string }>;
@@ -59,11 +60,11 @@ export default async function JournalDayPage({ params }: Props) {
     .eq("user_id", user.id)
     .order("written_at", { ascending: true });
 
-  const dayEntries = entriesForLocalDate(
-    (allEntries ?? []) as Entry[],
-    dateKey,
-    timeZone
-  );
+  const all = (allEntries ?? []) as Entry[];
+  const dayEntries = entriesForLocalDate(all, dateKey, timeZone);
+  const draftCount = all.filter(
+    (e) => e.is_draft && entryLocalDateKey(e.written_at, timeZone) === dateKey
+  ).length;
 
   if (dayEntries.length === 0) {
     return (
@@ -72,6 +73,13 @@ export default async function JournalDayPage({ params }: Props) {
           ← Journal
         </Link>
         <p className="font-serif text-2xl text-ink-muted">No entries this day</p>
+        {draftCount > 0 && (
+          <p className="text-sm text-ink-muted leading-relaxed">
+            You have {draftCount} unsaved draft
+            {draftCount === 1 ? "" : "s"} for this day. Open the prompt on Today
+            and tap &quot;Save to journal&quot; to publish them.
+          </p>
+        )}
       </div>
     );
   }
