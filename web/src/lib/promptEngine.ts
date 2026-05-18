@@ -21,7 +21,8 @@ export function pickPrompt(
   topics: TopicId[],
   slot: PromptSlot,
   userId: string,
-  date: Date = new Date()
+  date: Date = new Date(),
+  salt = ""
 ): string {
   const active = topics.length > 0 ? topics : (["free"] as TopicId[]);
   const pool: string[] = [];
@@ -36,7 +37,7 @@ export function pickPrompt(
   }
 
   const seed = hashString(
-    `${userId}:${dateKey(date)}:${slot}:${active.sort().join(",")}`
+    `${userId}:${dateKey(date)}:${slot}:${active.sort().join(",")}:${salt}`
   );
   return pool[seed % pool.length];
 }

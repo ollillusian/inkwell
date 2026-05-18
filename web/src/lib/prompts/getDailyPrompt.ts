@@ -9,6 +9,7 @@ import type { WritingPreferences } from "@/lib/writingVoice";
 export type DailyPromptResult = {
   prompt: string;
   source: "llm" | "cache" | "fallback";
+  deliveryDate: string;
 };
 
 export async function getDailyPrompt(
@@ -46,7 +47,11 @@ export async function getDailyPrompt(
     .maybeSingle();
 
   if (existing?.prompt_text) {
-    return { prompt: existing.prompt_text, source: "cache" };
+    return {
+      prompt: existing.prompt_text,
+      source: "cache",
+      deliveryDate,
+    };
   }
 
   const llmPrompt = await generatePromptWithLLM(topicsForPrompt, {
@@ -56,6 +61,7 @@ export async function getDailyPrompt(
     scheduledAtLabel,
     timeZone: nudgeContext.timeZone,
     voice: nudgeContext.voice,
+    diversityKey: `${deliveryDate}:${nudgeId}`,
   });
 
   const fallbackSlot =
@@ -71,7 +77,8 @@ export async function getDailyPrompt(
       topicsForPrompt,
       fallbackSlot as "morning" | "midday" | "evening",
       userId,
-      date
+      date,
+      nudgeId
     );
   const source: DailyPromptResult["source"] = llmPrompt ? "llm" : "fallback";
 
@@ -85,7 +92,7 @@ export async function getDailyPrompt(
     { onConflict: "user_id,delivery_date,prompt_slot" }
   );
 
-  return { prompt, source };
+  return { prompt, source, deliveryDate };
 }
 
 export function profileVoice(profile: {

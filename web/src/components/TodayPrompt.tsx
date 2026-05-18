@@ -74,6 +74,7 @@ export async function TodayPrompt({ userId }: { userId: string }) {
     .select("id")
     .eq("user_id", userId)
     .eq("prompt_slot", target.id)
+    .eq("is_draft", false)
     .gte("written_at", start)
     .lte("written_at", end)
     .maybeSingle();

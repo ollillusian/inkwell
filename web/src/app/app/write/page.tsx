@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { WriteEditor } from "@/components/WriteEditor";
 import type { TopicId } from "@/lib/promptEngine";
+import { localDayUtcBounds } from "@/lib/datetime";
 import {
   currentOpenNudge,
   legacyScheduleFromProfile,
@@ -35,7 +36,7 @@ export default async function WritePage({ searchParams }: Props) {
   if (isOnDemandPromptId(requestedNudge)) {
     const { data: delivery } = await supabase
       .from("prompt_deliveries")
-      .select("prompt_text")
+      .select("prompt_text, delivery_date")
       .eq("user_id", user.id)
       .eq("prompt_slot", requestedNudge)
       .order("created_at", { ascending: false })
@@ -43,13 +44,26 @@ export default async function WritePage({ searchParams }: Props) {
       .maybeSingle();
 
     if (delivery?.prompt_text) {
+      const { data: draft } = await supabase
+        .from("entries")
+        .select("id, body")
+        .eq("user_id", user.id)
+        .eq("prompt_slot", requestedNudge)
+        .eq("is_draft", true)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
       return (
         <WriteEditor
           promptText={delivery.prompt_text}
           nudgeId={requestedNudge}
           nudgeKind="once"
           topicsSnapshot={topics}
+          entryId={draft?.id}
+          initialBody={draft?.body ?? ""}
           markNudgeFired={false}
+          deliveryDate={delivery.delivery_date}
         />
       );
     }
@@ -76,7 +90,7 @@ export default async function WritePage({ searchParams }: Props) {
     return <p className="text-ink-muted">No nudges configured.</p>;
   }
 
-  const { prompt } = await getDailyPrompt(
+  const { prompt, deliveryDate } = await getDailyPrompt(
     supabase,
     user.id,
     topics,
@@ -91,6 +105,18 @@ export default async function WritePage({ searchParams }: Props) {
     },
     now
   );
+  const { start, end } = localDayUtcBounds(timeZone, now);
+  const { data: draft } = await supabase
+    .from("entries")
+    .select("id, body")
+    .eq("user_id", user.id)
+    .eq("prompt_slot", target.id)
+    .eq("is_draft", true)
+    .gte("written_at", start)
+    .lte("written_at", end)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
   return (
     <WriteEditor
@@ -98,6 +124,9 @@ export default async function WritePage({ searchParams }: Props) {
       nudgeId={target.id}
       nudgeKind={target.kind}
       topicsSnapshot={topics}
+      entryId={draft?.id}
+      initialBody={draft?.body ?? ""}
+      deliveryDate={deliveryDate}
     />
   );
 }

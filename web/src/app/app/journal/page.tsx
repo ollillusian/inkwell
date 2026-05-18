@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { legacyScheduleFromProfile } from "@/lib/nudges";
+import { formatOnDemandPromptLabel } from "@/lib/prompts/onDemandPrompt";
 import type { Entry } from "@/types/database";
 
 export default async function JournalPage() {
@@ -14,6 +15,7 @@ export default async function JournalPage() {
     .from("entries")
     .select("*")
     .eq("user_id", user.id)
+    .eq("is_draft", false)
     .order("written_at", { ascending: false })
     .limit(50);
 
@@ -49,27 +51,34 @@ export default async function JournalPage() {
     <div className="space-y-6">
       <h1 className="font-serif text-3xl">Journal</h1>
       <ul className="space-y-4">
-        {list.map((entry) => (
-          <li
-            key={entry.id}
-            className="rounded-2xl border border-ink-border bg-ink-surface p-5"
-          >
-            <p className="text-xs text-ink-muted uppercase tracking-wide">
-              {labelById[entry.prompt_slot] ?? entry.prompt_slot} ·{" "}
-              {new Date(entry.written_at).toLocaleDateString(undefined, {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              })}
-            </p>
-            <p className="mt-2 font-serif text-lg text-ink-muted line-clamp-2">
-              {entry.prompt_text}
-            </p>
-            <p className="mt-3 text-ink-fg leading-relaxed whitespace-pre-wrap line-clamp-4">
-              {entry.body}
-            </p>
-          </li>
-        ))}
+        {list.map((entry) => {
+          const promptLabel =
+            labelById[entry.prompt_slot] ??
+            formatOnDemandPromptLabel(entry.prompt_slot) ??
+            entry.prompt_slot;
+
+          return (
+            <li
+              key={entry.id}
+              className="rounded-2xl border border-ink-border bg-ink-surface p-5"
+            >
+              <p className="text-xs text-ink-muted uppercase tracking-wide">
+                {promptLabel} ·{" "}
+                {new Date(entry.written_at).toLocaleDateString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })}
+              </p>
+              <p className="mt-2 font-serif text-lg text-ink-muted line-clamp-2">
+                {entry.prompt_text}
+              </p>
+              <p className="mt-3 text-ink-fg leading-relaxed whitespace-pre-wrap line-clamp-4">
+                {entry.body}
+              </p>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

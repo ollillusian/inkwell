@@ -42,5 +42,6 @@ export async function POST() {
     nudgeId,
     label: ON_DEMAND_PROMPT_LABEL,
     source: result.source,
+    createdAt: now.toISOString(),
   });
 }

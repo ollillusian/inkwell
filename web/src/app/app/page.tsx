@@ -3,6 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import { TodayPrompt } from "@/components/TodayPrompt";
 import { PromptSkeleton } from "@/components/PromptSkeleton";
 import { OnDemandPrompt } from "@/components/OnDemandPrompt";
+import {
+  ON_DEMAND_PROMPT_PREFIX,
+  type OnDemandPromptSummary,
+} from "@/lib/prompts/onDemandPrompt";
 
 export default async function TodayPage() {
   const supabase = await createClient();
@@ -11,12 +15,42 @@ export default async function TodayPage() {
   } = await supabase.auth.getUser();
   if (!user) return null;
 
+  const { data: deliveries } = await supabase
+    .from("prompt_deliveries")
+    .select("prompt_slot, prompt_text, created_at")
+    .eq("user_id", user.id)
+    .like("prompt_slot", `${ON_DEMAND_PROMPT_PREFIX}%`)
+    .order("created_at", { ascending: false })
+    .limit(5);
+
+  const recentIds = (deliveries ?? []).map((item) => item.prompt_slot);
+  const { data: drafts } =
+    recentIds.length > 0
+      ? await supabase
+          .from("entries")
+          .select("prompt_slot, body")
+          .eq("user_id", user.id)
+          .eq("is_draft", true)
+          .in("prompt_slot", recentIds)
+      : { data: [] };
+  const draftBySlot = Object.fromEntries(
+    (drafts ?? []).map((entry) => [entry.prompt_slot, entry.body])
+  );
+  const recentPrompts: OnDemandPromptSummary[] = (deliveries ?? []).map(
+    (item) => ({
+      nudgeId: item.prompt_slot,
+      prompt: item.prompt_text,
+      createdAt: item.created_at,
+      draftBody: draftBySlot[item.prompt_slot],
+    })
+  );
+
   return (
     <div className="space-y-8">
       <Suspense fallback={<PromptSkeleton />}>
         <TodayPrompt userId={user.id} />
       </Suspense>
-      <OnDemandPrompt />
+      <OnDemandPrompt initialPrompts={recentPrompts} />
     </div>
   );
 }

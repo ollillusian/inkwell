@@ -28,6 +28,27 @@ function normalizeGeneratedPrompt(text: string): string {
     .trim();
 }
 
+const PROMPT_SHAPES = [
+  "sensory snapshot: ask them to begin with one concrete thing they can see, hear, smell, or touch, then follow what it opens",
+  "unsent message: invite a note to a person, place, past self, future self, or unnamed part of them",
+  "list-making: ask for a short list with a specific constraint instead of one broad reflection",
+  "scene work: ask them to write a small scene from today, memory, or imagination in present tense",
+  "body-first: begin with a physical signal, posture, breath, or sensation before naming emotion",
+  "choice point: ask about a small decision, tradeoff, refusal, or permission available right now",
+  "object lens: use an ordinary object nearby as the doorway into the writing",
+  "conversation: invite dialogue between two parts of them, without needing resolution",
+  "time travel: connect this moment to a past version or future version of them",
+  "counterfactual: ask a gentle 'what if' that explores another angle without forcing optimism",
+];
+
+function hashString(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
 export async function generatePromptWithLLM(
   topics: TopicId[],
   context: {
@@ -37,6 +58,7 @@ export async function generatePromptWithLLM(
     scheduledAtLabel: string;
     timeZone: string;
     voice: WritingPreferences;
+    diversityKey?: string;
   }
 ): Promise<string | null> {
   const client = openaiClient();
@@ -54,6 +76,10 @@ export async function generatePromptWithLLM(
 
   const nowLocal = formatLocalNowForLLM(new Date(), context.timeZone);
   const voiceBrief = buildVoiceBrief(context.voice);
+  const shapeSeed = hashString(
+    `${active.join(",")}:${context.nudgeLabel}:${context.scheduledAtLabel}:${context.diversityKey ?? nowLocal}`
+  );
+  const promptShape = PROMPT_SHAPES[shapeSeed % PROMPT_SHAPES.length];
 
   const kindNote =
     context.nudgeKind === "once"
@@ -80,7 +106,9 @@ ${themes}
 
 ${voiceBrief || "No specific voice set, keep prompts honest and inviting."}
 
-Write one single-sentence prompt that fits their voice, with no em dashes.`,
+Prompt shape to use this time: ${promptShape}.
+
+Write one fresh, specific prompt that fits their voice. Vary the opening and avoid defaulting to "what are you feeling" or "what are you holding" unless the chosen shape truly needs it. No em dashes.`,
         },
       ],
     });
