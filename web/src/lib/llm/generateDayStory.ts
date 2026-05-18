@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { formatLocalTime } from "@/lib/datetime";
+import { sanitizeStoryProse } from "@/lib/storyFormat";
 import {
   buildVoiceBrief,
   type WritingPreferences,
@@ -49,13 +50,15 @@ ${e.body.trim()}`;
       messages: [
         {
           role: "system",
-          content: `You weave a user's same-day journal fragments into one cohesive literary short story (400–700 words).
+          content: `You weave a user's same-day journal fragments into one cohesive literary short story (400 to 700 words).
 
 Rules:
 - Use ONLY facts, feelings, images, and events present in their entries. Do not invent major plot points, names, or backstory they did not write.
-- You may add light connective tissue, transitions, and atmosphere — like a skilled editor shaping fragments into a single narrative arc for that calendar day.
+- You may add light connective tissue, transitions, and atmosphere, like a skilled editor shaping fragments into a single narrative arc for that calendar day.
 - Match their writing voice and tone from onboarding.
-- Write in third person or first person — whichever serves the material; stay consistent.
+- Write in third person or first person, whichever serves the material; stay consistent.
+- Never assume the writer's gender. Do not use she, he, him, her, or gendered pronouns unless their entries explicitly state how they identify. Prefer they/them or rewrite without pronouns.
+- Do not use em dashes. Use commas, periods, or semicolons instead.
 - No meta commentary, no "here is your story", no mention of AI or journaling apps.
 - Output ONLY the story prose.`,
         },
@@ -74,7 +77,7 @@ Write the short story.`,
 
     const text = response.choices[0]?.message?.content?.trim();
     if (!text || text.length < 80) return null;
-    return text;
+    return sanitizeStoryProse(text);
   } catch (e) {
     console.error("[inkwell] day story generation failed:", e);
     return null;

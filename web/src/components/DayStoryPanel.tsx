@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { sanitizeStoryProse } from "@/lib/storyFormat";
 
 type Props = {
   dateKey: string;
@@ -31,7 +32,8 @@ export function DayStoryPanel({
         setError(data.error ?? "Could not generate story");
         return;
       }
-      setStory(data.story?.body ?? null);
+      const body = data.story?.body;
+      setStory(body ? sanitizeStoryProse(body) : null);
     } catch {
       setError("Network error");
     } finally {

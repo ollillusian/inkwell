@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import {
   entriesForLocalDate,
-  entryGraphPoints,
   entryLocalDateKey,
   wordCount,
 } from "@/lib/journal";
@@ -15,7 +14,10 @@ import {
 } from "@/lib/datetime";
 import { legacyScheduleFromProfile } from "@/lib/nudges";
 import { formatOnDemandPromptLabel } from "@/lib/prompts/onDemandPrompt";
-import { EntryDayGraph } from "@/components/EntryDayGraph";
+import type { TopicId } from "@/lib/promptEngine";
+import { buildDayThemeGraph } from "@/lib/themeGraph";
+import { sanitizeStoryProse } from "@/lib/storyFormat";
+import { ThemeNetworkGraph } from "@/components/ThemeNetworkGraph";
 import { DayStoryPanel } from "@/components/DayStoryPanel";
 
 type Props = {
@@ -26,9 +28,7 @@ function slotLabel(
   slot: string,
   labelById: Record<string, string>
 ): string {
-  return (
-    labelById[slot] ?? formatOnDemandPromptLabel(slot) ?? slot
-  );
+  return labelById[slot] ?? formatOnDemandPromptLabel(slot) ?? slot;
 }
 
 export default async function JournalDayPage({ params }: Props) {
@@ -58,12 +58,13 @@ export default async function JournalDayPage({ params }: Props) {
     .from("entries")
     .select("*")
     .eq("user_id", user.id)
-    .order("written_at", { ascending: true });
+    .order("written_at", { ascending: false })
+    .limit(500);
 
   const all = (allEntries ?? []) as Entry[];
   const dayEntries = entriesForLocalDate(all, dateKey, timeZone);
   const draftCount = all.filter(
-    (e) => e.is_draft && entryLocalDateKey(e.written_at, timeZone) === dateKey
+    (e) => e.is_draft === true && entryLocalDateKey(e.written_at, timeZone) === dateKey
   ).length;
 
   if (dayEntries.length === 0) {
@@ -86,13 +87,15 @@ export default async function JournalDayPage({ params }: Props) {
 
   const [y, mo, d] = dateKey.split("-").map(Number);
   const dayDate = zonedLocalToUtc(y, mo, d, 12, 0, timeZone);
-  const graphLabels = Object.fromEntries(
-    [...new Set(dayEntries.map((e) => e.prompt_slot))].map((slot) => [
-      slot,
-      resolveLabel(slot),
-    ])
+  const themeGraph = buildDayThemeGraph(
+    dayEntries.map((e) => ({
+      id: e.id,
+      topics_snapshot: e.topics_snapshot,
+      prompt_slot: e.prompt_slot,
+      nudgeLabel: resolveLabel(e.prompt_slot),
+    })),
+    (profile?.topics ?? []) as TopicId[]
   );
-  const graphPoints = entryGraphPoints(dayEntries, timeZone, graphLabels);
 
   const { data: dayStory } = await supabase
     .from("day_stories")
@@ -120,14 +123,16 @@ export default async function JournalDayPage({ params }: Props) {
 
       <section className="space-y-3">
         <h2 className="text-sm font-medium uppercase tracking-wide text-ink-muted">
-          Your day at a glance
+          Theme map
         </h2>
-        <EntryDayGraph points={graphPoints} />
+        <ThemeNetworkGraph graph={themeGraph} />
       </section>
 
       <DayStoryPanel
         dateKey={dateKey}
-        initialStory={dayStory?.body ?? null}
+        initialStory={
+          dayStory?.body ? sanitizeStoryProse(dayStory.body) : null
+        }
         entryCount={dayEntries.length}
       />
 
