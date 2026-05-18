@@ -41,7 +41,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             const active =
               item.href === "/app"
                 ? pathname === "/app" || pathname === "/app/write"
-                : pathname.startsWith(item.href);
+                : pathname === item.href ||
+                  pathname.startsWith(`${item.href}/`);
             return (
               <Link
                 key={item.href}

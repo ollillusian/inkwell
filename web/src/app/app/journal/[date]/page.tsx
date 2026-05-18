@@ -1,0 +1,153 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import {
+  entriesForLocalDate,
+  entryGraphPoints,
+  wordCount,
+} from "@/lib/journal";
+import {
+  formatLocalDateLong,
+  formatWrittenAt,
+  zonedLocalToUtc,
+} from "@/lib/datetime";
+import { legacyScheduleFromProfile } from "@/lib/nudges";
+import { formatOnDemandPromptLabel } from "@/lib/prompts/onDemandPrompt";
+import { EntryDayGraph } from "@/components/EntryDayGraph";
+import { DayStoryPanel } from "@/components/DayStoryPanel";
+import type { Entry } from "@/types/database";
+
+type Props = {
+  params: Promise<{ date: string }>;
+};
+
+function slotLabel(
+  slot: string,
+  labelById: Record<string, string>
+): string {
+  return (
+    labelById[slot] ?? formatOnDemandPromptLabel(slot) ?? slot
+  );
+}
+
+export default async function JournalDayPage({ params }: Props) {
+  const { date: dateKey } = await params;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) notFound();
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .single();
+
+  const timeZone = profile?.timezone || "UTC";
+  const schedule = legacyScheduleFromProfile(profile ?? {});
+  const labelById = Object.fromEntries(
+    schedule.nudges.map((n) => [n.id, n.label])
+  );
+  const resolveLabel = (slot: string) => slotLabel(slot, labelById);
+
+  const { data: allEntries } = await supabase
+    .from("entries")
+    .select("*")
+    .eq("user_id", user.id)
+    .order("written_at", { ascending: true });
+
+  const dayEntries = entriesForLocalDate(
+    (allEntries ?? []) as Entry[],
+    dateKey,
+    timeZone
+  );
+
+  if (dayEntries.length === 0) {
+    return (
+      <div className="space-y-6">
+        <Link href="/app/journal" className="text-sm text-ink-accent">
+          ← Journal
+        </Link>
+        <p className="font-serif text-2xl text-ink-muted">No entries this day</p>
+      </div>
+    );
+  }
+
+  const [y, mo, d] = dateKey.split("-").map(Number);
+  const dayDate = zonedLocalToUtc(y, mo, d, 12, 0, timeZone);
+  const graphLabels = Object.fromEntries(
+    [...new Set(dayEntries.map((e) => e.prompt_slot))].map((slot) => [
+      slot,
+      resolveLabel(slot),
+    ])
+  );
+  const graphPoints = entryGraphPoints(dayEntries, timeZone, graphLabels);
+
+  const { data: dayStory } = await supabase
+    .from("day_stories")
+    .select("body")
+    .eq("user_id", user.id)
+    .eq("story_date", dateKey)
+    .maybeSingle();
+
+  const totalWords = dayEntries.reduce((n, e) => n + wordCount(e.body), 0);
+
+  return (
+    <div className="space-y-10 pb-8">
+      <div>
+        <Link href="/app/journal" className="text-sm text-ink-accent">
+          ← Journal
+        </Link>
+        <h1 className="font-serif text-3xl mt-4">
+          {formatLocalDateLong(dayDate, timeZone)}
+        </h1>
+        <p className="mt-1 text-sm text-ink-muted">
+          {dayEntries.length} {dayEntries.length === 1 ? "entry" : "entries"} ·{" "}
+          {totalWords} words
+        </p>
+      </div>
+
+      <section className="space-y-3">
+        <h2 className="text-sm font-medium uppercase tracking-wide text-ink-muted">
+          Your day at a glance
+        </h2>
+        <EntryDayGraph points={graphPoints} />
+      </section>
+
+      <DayStoryPanel
+        dateKey={dateKey}
+        initialStory={dayStory?.body ?? null}
+        entryCount={dayEntries.length}
+      />
+
+      <section className="space-y-4">
+        <h2 className="text-sm font-medium uppercase tracking-wide text-ink-muted">
+          Entries
+        </h2>
+        <ul className="space-y-4">
+          {dayEntries.map((entry) => (
+            <li
+              key={entry.id}
+              className="rounded-2xl border border-ink-border bg-ink-surface p-5"
+            >
+              <p className="text-xs text-ink-muted uppercase tracking-wide">
+                {resolveLabel(entry.prompt_slot)} ·{" "}
+                {formatWrittenAt(entry.written_at, timeZone)} ·{" "}
+                {wordCount(entry.body)} words
+              </p>
+              <p className="mt-2 font-serif text-lg text-ink-muted">
+                {entry.prompt_text}
+              </p>
+              <p className="mt-3 text-ink-fg leading-relaxed whitespace-pre-wrap">
+                {entry.body}
+              </p>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
+  );
+}

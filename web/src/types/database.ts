@@ -31,3 +31,12 @@ export type Entry = {
   updated_at?: string;
   is_draft: boolean;
 };
+
+export type DayStory = {
+  id: string;
+  user_id: string;
+  story_date: string;
+  body: string;
+  entry_ids: string[];
+  created_at: string;
+};

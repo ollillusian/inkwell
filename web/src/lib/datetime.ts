@@ -39,13 +39,8 @@ export function localMinutesSinceMidnight(date: Date, timeZone: string): number 
   return hour * 60 + minute;
 }
 
-function tzOffsetMs(date: Date, timeZone: string): number {
-  const inTz = new Date(date.toLocaleString("en-US", { timeZone }));
-  const inUtc = new Date(date.toLocaleString("en-US", { timeZone: "UTC" }));
-  return inTz.getTime() - inUtc.getTime();
-}
-
-function zonedLocalToUtc(
+/** UTC instant for a wall-clock time in an IANA zone (DST-safe). */
+export function zonedLocalToUtc(
   y: number,
   mo: number,
   d: number,
@@ -53,27 +48,37 @@ function zonedLocalToUtc(
   mi: number,
   timeZone: string
 ): Date {
-  const guess = new Date(Date.UTC(y, mo - 1, d, h, mi, 0));
-  return new Date(guess.getTime() - tzOffsetMs(guess, timeZone));
+  let t = Date.UTC(y, mo - 1, d, h, mi, 0);
+  for (let i = 0; i < 6; i++) {
+    const p = localTimeParts(new Date(t), timeZone);
+    const py = Number(p.year);
+    const pm = Number(p.month);
+    const pd = Number(p.day);
+    if (py === y && pm === mo && pd === d && p.hour === h && p.minute === mi) {
+      return new Date(t);
+    }
+    const diffMin =
+      (h - p.hour) * 60 +
+      (mi - p.minute) +
+      (d - pd) * 24 * 60 +
+      (mo - pm) * 31 * 24 * 60 +
+      (y - py) * 365 * 24 * 60;
+    t += diffMin * 60_000;
+  }
+  return new Date(t);
 }
 
+/** Format scheduled nudge minutes (already local wall time) as 12h clock. */
 export function formatMinutesLocal(
   minutes: number,
-  timeZone: string,
-  date: Date = new Date()
+  _timeZone?: string,
+  _date?: Date
 ): string {
-  const { year, month, day } = localTimeParts(date, timeZone);
-  const y = Number(year);
-  const mo = Number(month);
-  const d = Number(day);
-  const h = Math.floor(minutes / 60) % 24;
+  const h24 = Math.floor(minutes / 60) % 24;
   const m = minutes % 60;
-  const utc = zonedLocalToUtc(y, mo, d, h, m, timeZone);
-  return utc.toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone,
-  });
+  const h12 = h24 % 12 || 12;
+  const ampm = h24 < 12 ? "AM" : "PM";
+  return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
 export function formatLocalDateLong(date: Date, timeZone: string): string {
@@ -83,6 +88,33 @@ export function formatLocalDateLong(date: Date, timeZone: string): string {
     month: "long",
     day: "numeric",
   }).format(date);
+}
+
+export function formatLocalDateMedium(date: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat(undefined, {
+    timeZone,
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
+
+export function formatLocalTime(
+  date: Date,
+  timeZone: string,
+  opts?: { hour12?: boolean }
+): string {
+  return new Intl.DateTimeFormat(undefined, {
+    timeZone,
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: opts?.hour12 ?? true,
+  }).format(date);
+}
+
+export function formatWrittenAt(iso: string, timeZone: string): string {
+  const date = new Date(iso);
+  return `${formatLocalDateMedium(date, timeZone)} · ${formatLocalTime(date, timeZone)}`;
 }
 
 export function formatLocalNowForLLM(date: Date, timeZone: string): string {
@@ -96,6 +128,16 @@ export function formatLocalNowForLLM(date: Date, timeZone: string): string {
   }).format(date);
 }
 
+function addDaysToDateKey(dateKey: string, days: number): string {
+  const [y, mo, d] = dateKey.split("-").map(Number);
+  const utc = Date.UTC(y, mo - 1, d + days);
+  const nd = new Date(utc);
+  const yy = nd.getUTCFullYear();
+  const mm = String(nd.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(nd.getUTCDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
 export function localDayUtcBounds(
   timeZone: string,
   date: Date = new Date()
@@ -103,7 +145,10 @@ export function localDayUtcBounds(
   const dateKey = localDateKey(date, timeZone);
   const [y, mo, d] = dateKey.split("-").map(Number);
   const start = zonedLocalToUtc(y, mo, d, 0, 0, timeZone);
-  const end = zonedLocalToUtc(y, mo, d, 23, 59, timeZone);
+  const nextKey = addDaysToDateKey(dateKey, 1);
+  const [y2, mo2, d2] = nextKey.split("-").map(Number);
+  const endExclusive = zonedLocalToUtc(y2, mo2, d2, 0, 0, timeZone);
+  const end = new Date(endExclusive.getTime() - 1);
   return {
     dateKey,
     start: start.toISOString(),
