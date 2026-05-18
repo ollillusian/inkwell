@@ -13,6 +13,7 @@ type Props = {
   topicsSnapshot: string[];
   entryId?: string;
   initialBody?: string;
+  markNudgeFired?: boolean;
 };
 
 export function WriteEditor({
@@ -22,6 +23,7 @@ export function WriteEditor({
   topicsSnapshot,
   entryId,
   initialBody = "",
+  markNudgeFired = nudgeKind === "once",
 }: Props) {
   const [body, setBody] = useState(initialBody);
   const [saving, setSaving] = useState(false);
@@ -53,7 +55,7 @@ export function WriteEditor({
       });
     }
 
-    if (nudgeKind === "once") {
+    if (markNudgeFired) {
       const { data: profile } = await supabase
         .from("profiles")
         .select("nudges_fired")

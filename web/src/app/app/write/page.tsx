@@ -8,6 +8,7 @@ import {
   resolvedNudgesForDay,
 } from "@/lib/nudges";
 import { getDailyPrompt, profileVoice } from "@/lib/prompts/getDailyPrompt";
+import { isOnDemandPromptId } from "@/lib/prompts/onDemandPrompt";
 
 type Props = {
   searchParams: Promise<{ nudge?: string }>;
@@ -29,6 +30,31 @@ export default async function WritePage({ searchParams }: Props) {
 
   const topics = (profile?.topics ?? []) as TopicId[];
   const timeZone = profile?.timezone || "UTC";
+  const requestedNudge = params.nudge;
+
+  if (isOnDemandPromptId(requestedNudge)) {
+    const { data: delivery } = await supabase
+      .from("prompt_deliveries")
+      .select("prompt_text")
+      .eq("user_id", user.id)
+      .eq("prompt_slot", requestedNudge)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (delivery?.prompt_text) {
+      return (
+        <WriteEditor
+          promptText={delivery.prompt_text}
+          nudgeId={requestedNudge}
+          nudgeKind="once"
+          topicsSnapshot={topics}
+          markNudgeFired={false}
+        />
+      );
+    }
+  }
+
   const schedule = legacyScheduleFromProfile(profile ?? {});
   const fired = (profile?.nudges_fired ?? []) as string[];
   const now = new Date();
@@ -41,7 +67,7 @@ export default async function WritePage({ searchParams }: Props) {
   );
 
   const target =
-    resolved.find((n) => n.id === params.nudge) ??
+    resolved.find((n) => n.id === requestedNudge) ??
     currentOpenNudge(resolved, timeZone, now) ??
     nextUpcomingNudge(resolved, timeZone, now) ??
     resolved[0];
