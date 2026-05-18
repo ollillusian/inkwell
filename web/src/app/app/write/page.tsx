@@ -40,7 +40,7 @@ export default async function WritePage({ searchParams }: Props) {
     timeZone
   );
 
-  let target =
+  const target =
     resolved.find((n) => n.id === params.nudge) ??
     currentOpenNudge(resolved, timeZone, now) ??
     nextUpcomingNudge(resolved, timeZone, now) ??

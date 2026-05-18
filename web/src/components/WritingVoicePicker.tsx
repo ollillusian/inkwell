@@ -22,7 +22,7 @@ export function WritingVoicePicker({ value, onChange }: Props) {
   return (
     <div className="space-y-5">
       <p className="text-sm text-ink-muted">
-        Prompts will match this voice — including darker, sharper, or more raw
+        Prompts will match this voice, including darker, sharper, or more raw
         writing if you want that.
       </p>
       <div className="space-y-2">
@@ -56,7 +56,7 @@ export function WritingVoicePicker({ value, onChange }: Props) {
           onChange={(e) =>
             onChange({ ...value, writingVoice: e.target.value })
           }
-          placeholder="e.g. I want to write more dark, gothic stuff I like — revenge fantasies, grief, things I can't say out loud…"
+          placeholder="e.g. I want to write more dark, gothic stuff I like, revenge fantasies, grief, things I can't say out loud."
           className="mt-2 w-full min-h-[100px] rounded-xl border border-ink-border bg-ink-surface px-4 py-3 text-sm"
         />
       </label>
@@ -64,12 +64,3 @@ export function WritingVoicePicker({ value, onChange }: Props) {
   );
 }
 
-function div({
-  children,
-  className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return <div className={className}>{children}</div>;
-}
