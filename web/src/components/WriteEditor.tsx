@@ -17,7 +17,24 @@ type Props = {
   deliveryDate?: string;
 };
 
-type DraftStatus = "idle" | "saving" | "saved" | "error";
+type DraftStatus = "idle" | "saving" | "saved" | "manual" | "error";
+
+class DraftSchemaUnavailableError extends Error {
+  constructor() {
+    super("Draft autosave is unavailable until the database migration runs.");
+    this.name = "DraftSchemaUnavailableError";
+  }
+}
+
+function isMissingDraftColumnError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const maybeError = error as { code?: string; message?: string };
+  return (
+    maybeError.code === "PGRST204" ||
+    maybeError.code === "42703" ||
+    Boolean(maybeError.message?.includes("is_draft"))
+  );
+}
 
 export function WriteEditor({
   promptText,
@@ -39,6 +56,7 @@ export function WriteEditor({
   const router = useRouter();
   const currentEntryIdRef = useRef(entryId);
   const lastSavedBody = useRef(initialBody);
+  const draftAutosaveAvailable = useRef(true);
   const saveVersion = useRef(0);
 
   const persistEntry = useCallback(
@@ -52,11 +70,14 @@ export function WriteEditor({
       } = await supabase.auth.getUser();
       if (!user) return null;
 
-      const payload = {
+      const basePayload = {
         prompt_text: promptText,
         prompt_slot: nudgeId,
         body: bodyToSave,
         topics_snapshot: topicsSnapshot,
+      };
+      const payload = {
+        ...basePayload,
         is_draft: isDraft,
       };
 
@@ -77,7 +98,39 @@ export function WriteEditor({
             .select("id")
             .single();
 
-      if (error) throw error;
+      if (error) {
+        if (isMissingDraftColumnError(error) && isDraft) {
+          throw new DraftSchemaUnavailableError();
+        }
+
+        if (isMissingDraftColumnError(error)) {
+          const fallback = existingEntryId
+            ? await supabase
+                .from("entries")
+                .update(basePayload)
+                .eq("id", existingEntryId)
+                .eq("user_id", user.id)
+                .select("id")
+                .single()
+            : await supabase
+                .from("entries")
+                .insert({
+                  ...basePayload,
+                  user_id: user.id,
+                })
+                .select("id")
+                .single();
+
+          if (fallback.error) throw fallback.error;
+          const fallbackEntryId = fallback.data?.id as string | undefined;
+          if (!fallbackEntryId) return null;
+          currentEntryIdRef.current = fallbackEntryId;
+          setCurrentEntryId(fallbackEntryId);
+          return fallbackEntryId;
+        }
+
+        throw error;
+      }
       const savedEntryId = data?.id as string | undefined;
       if (!savedEntryId) return null;
 
@@ -100,6 +153,7 @@ export function WriteEditor({
 
   useEffect(() => {
     if (body === lastSavedBody.current) return;
+    if (!draftAutosaveAvailable.current) return;
     if (!body.trim() && !currentEntryId) {
       return;
     }
@@ -115,6 +169,12 @@ export function WriteEditor({
           setDraftStatus("saved");
         }
       } catch (error) {
+        if (error instanceof DraftSchemaUnavailableError) {
+          draftAutosaveAvailable.current = false;
+          if (saveVersion.current === version) setDraftStatus("manual");
+          return;
+        }
+
         console.error("[inkwell] draft autosave failed:", error);
         if (saveVersion.current === version) setDraftStatus("error");
       }
@@ -189,7 +249,13 @@ export function WriteEditor({
           const nextBody = e.target.value;
           setBody(nextBody);
           setSaved(false);
-          setDraftStatus(nextBody.trim() || currentEntryId ? "saving" : "idle");
+          setDraftStatus(
+            nextBody.trim() || currentEntryId
+              ? draftAutosaveAvailable.current
+                ? "saving"
+                : "manual"
+              : "idle"
+          );
         }}
         placeholder="Start anywhere. No one else will read this unless you choose to share."
         className="w-full min-h-[280px] resize-y rounded-2xl border border-ink-border bg-ink-surface/50 px-5 py-4 text-lg leading-relaxed text-ink-fg placeholder:text-ink-muted/40 focus:outline-none focus:ring-2 focus:ring-ink-accent/30 font-serif"
@@ -201,6 +267,8 @@ export function WriteEditor({
           ? "saving draft..."
           : draftStatus === "saved"
             ? "draft saved"
+            : draftStatus === "manual"
+              ? "use Save to journal until autosave is ready"
             : draftStatus === "error"
               ? "autosave needs a retry"
               : "stored privately in your account"}
