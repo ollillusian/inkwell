@@ -72,7 +72,8 @@ export function formatOnDemandPromptLabel(id?: string | null): string | null {
 export function onDemandPromptContext(
   timeZone: string,
   voice: WritingPreferences,
-  date: Date = new Date()
+  date: Date = new Date(),
+  nudgeId?: string
 ): {
   label: string;
   kind: NudgeKind;
@@ -80,8 +81,12 @@ export function onDemandPromptContext(
   timeZone: string;
   voice: WritingPreferences;
 } {
+  const label =
+    (nudgeId && formatOnDemandPromptLabel(nudgeId)) ||
+    ON_DEMAND_PROMPT_LABEL;
+
   return {
-    label: ON_DEMAND_PROMPT_LABEL,
+    label,
     kind: "once",
     effectiveMinutes: localMinutesSinceMidnight(date, timeZone),
     timeZone,

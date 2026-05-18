@@ -4,13 +4,37 @@ import { generatePromptWithLLM } from "@/lib/llm/generatePrompt";
 import { formatMinutesLocal } from "@/lib/datetime";
 import { pickPrompt, type TopicId } from "@/lib/promptEngine";
 import type { NudgeKind } from "@/lib/nudges";
+import { isOnDemandPromptId } from "@/lib/prompts/onDemandPrompt";
 import type { WritingPreferences } from "@/lib/writingVoice";
 
 export type DailyPromptResult = {
   prompt: string;
-  source: "llm" | "cache" | "fallback";
   deliveryDate: string;
+  source: "llm" | "cache" | "fallback";
 };
+
+export type GetDailyPromptOptions = {
+  /** Extra novelty for on-demand / surprise prompts. */
+  highVariety?: boolean;
+};
+
+async function fetchRecentPromptTexts(
+  supabase: SupabaseClient,
+  userId: string,
+  excludeSlot?: string
+): Promise<string[]> {
+  const { data } = await supabase
+    .from("prompt_deliveries")
+    .select("prompt_text, prompt_slot")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(16);
+
+  return (data ?? [])
+    .filter((row) => row.prompt_slot !== excludeSlot)
+    .map((row) => row.prompt_text)
+    .filter((text): text is string => Boolean(text?.trim()));
+}
 
 export async function getDailyPrompt(
   supabase: SupabaseClient,
@@ -25,7 +49,8 @@ export async function getDailyPrompt(
     timeZone: string;
     voice: WritingPreferences;
   },
-  date: Date = new Date()
+  date: Date = new Date(),
+  options: GetDailyPromptOptions = {}
 ): Promise<DailyPromptResult> {
   const deliveryDate = localDateKey(date, nudgeContext.timeZone);
   const topicsForPrompt = nudgeContext.topicHint
@@ -49,20 +74,43 @@ export async function getDailyPrompt(
   if (existing?.prompt_text) {
     return {
       prompt: existing.prompt_text,
-      source: "cache",
       deliveryDate,
+      source: "cache",
     };
   }
 
-  const llmPrompt = await generatePromptWithLLM(topicsForPrompt, {
-    nudgeLabel: nudgeContext.label,
-    nudgeKind: nudgeContext.kind,
-    topicHint: nudgeContext.topicHint,
-    scheduledAtLabel,
-    timeZone: nudgeContext.timeZone,
-    voice: nudgeContext.voice,
-    diversityKey: `${deliveryDate}:${nudgeId}`,
-  });
+  const highVariety =
+    options.highVariety ??
+    (isOnDemandPromptId(nudgeId) ||
+      nudgeId === "surprise" ||
+      nudgeContext.kind === "once");
+
+  const recentPrompts = await fetchRecentPromptTexts(
+    supabase,
+    userId,
+    nudgeId
+  );
+
+  const varietySeed = highVariety
+    ? `${userId}:${nudgeId}:${deliveryDate}:${date.getTime()}:${Math.random().toString(36).slice(2, 10)}`
+    : `${userId}:${nudgeId}:${deliveryDate}`;
+
+  const llmPrompt = await generatePromptWithLLM(
+    topicsForPrompt,
+    {
+      nudgeLabel: nudgeContext.label,
+      nudgeKind: nudgeContext.kind,
+      topicHint: nudgeContext.topicHint,
+      scheduledAtLabel,
+      timeZone: nudgeContext.timeZone,
+      voice: nudgeContext.voice,
+    },
+    {
+      varietySeed,
+      highVariety,
+      recentPrompts,
+    }
+  );
 
   const fallbackSlot =
     nudgeContext.label.toLowerCase().includes("bed") || nudgeId === "bedtime"
@@ -78,7 +126,7 @@ export async function getDailyPrompt(
       fallbackSlot as "morning" | "midday" | "evening",
       userId,
       date,
-      nudgeId
+      varietySeed
     );
   const source: DailyPromptResult["source"] = llmPrompt ? "llm" : "fallback";
 
@@ -92,7 +140,7 @@ export async function getDailyPrompt(
     { onConflict: "user_id,delivery_date,prompt_slot" }
   );
 
-  return { prompt, source, deliveryDate };
+  return { prompt, deliveryDate, source };
 }
 
 export function profileVoice(profile: {

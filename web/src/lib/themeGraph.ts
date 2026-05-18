@@ -43,8 +43,8 @@ export const TOPIC_COLORS: Record<TopicId, string> = {
   travel: "#a07d5c",
 };
 
-const MOMENT_COLOR = "#8a9bab";
-const MOMENT_GLOW = "#c5d0da";
+/** Muted ink tone for nudge moments — matches --ink-muted family. */
+const MOMENT_COLOR = "#6b6560";
 
 type DayEntryInput = {
   id: string;

@@ -19,14 +19,24 @@ export async function POST(request: Request) {
     writingVoice: body.writingVoice ?? "",
   };
 
-  const llm = await generatePromptWithLLM(topics, {
-    nudgeLabel: label,
-    nudgeKind: kind,
-    topicHint: body.topicHint,
-    scheduledAtLabel: label,
-    timeZone,
-    voice,
-  });
+  const llm = await generatePromptWithLLM(
+    topics,
+    {
+      nudgeLabel: label,
+      nudgeKind: kind,
+      topicHint: body.topicHint,
+      scheduledAtLabel: label,
+      timeZone,
+      voice,
+    },
+    {
+      varietySeed: `dev:${label}:${Date.now()}`,
+      highVariety: kind === "once",
+      recentPrompts: Array.isArray(body.recentPrompts)
+        ? body.recentPrompts
+        : [],
+    }
+  );
 
   const fallbackSlot = label.toLowerCase().includes("bed")
     ? "evening"

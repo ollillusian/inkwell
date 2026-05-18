@@ -32,23 +32,30 @@ body {
 
 @media (prefers-reduced-motion: no-preference) {
   .theme-graph-svg .theme-graph-edge {
-    opacity: 0;
-    animation: inkwell-graph-edge 0.85s ease forwards;
+    animation: inkwell-graph-fade 0.7s ease forwards;
   }
   .theme-graph-svg .theme-graph-node {
+    animation: inkwell-graph-fade 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+}
+
+@keyframes inkwell-graph-fade {
+  from {
     opacity: 0;
-    animation: inkwell-graph-node 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 
-@keyframes inkwell-graph-edge {
-  to {
-    opacity: 1;
-  }
+.theme-graph-node-dim {
+  opacity: 0.34;
+  transition: opacity 0.2s ease;
 }
 
-@keyframes inkwell-graph-node {
-  to {
-    opacity: 1;
-  }
+.theme-graph-node:focus-visible > circle:last-of-type {
+  stroke: var(--ink-accent);
+  stroke-width: 2.5;
 }
