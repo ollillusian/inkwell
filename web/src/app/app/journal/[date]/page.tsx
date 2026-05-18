@@ -15,10 +15,11 @@ import {
 import { legacyScheduleFromProfile } from "@/lib/nudges";
 import { formatOnDemandPromptLabel } from "@/lib/prompts/onDemandPrompt";
 import type { TopicId } from "@/lib/promptEngine";
+import { entriesToThemeGraphInput } from "@/lib/journalGraph";
 import { buildDayThemeGraph } from "@/lib/themeGraph";
 import { sanitizeStoryProse } from "@/lib/storyFormat";
 import { ThemeNetworkGraph } from "@/components/ThemeNetworkGraph";
-import { DayStoryPanel } from "@/components/DayStoryPanel";
+import { PeriodStoryPanel } from "@/components/PeriodStoryPanel";
 
 type Props = {
   params: Promise<{ date: string }>;
@@ -88,12 +89,7 @@ export default async function JournalDayPage({ params }: Props) {
   const [y, mo, d] = dateKey.split("-").map(Number);
   const dayDate = zonedLocalToUtc(y, mo, d, 12, 0, timeZone);
   const themeGraph = buildDayThemeGraph(
-    dayEntries.map((e) => ({
-      id: e.id,
-      topics_snapshot: e.topics_snapshot,
-      prompt_slot: e.prompt_slot,
-      nudgeLabel: resolveLabel(e.prompt_slot),
-    })),
+    entriesToThemeGraphInput(dayEntries, timeZone, resolveLabel),
     (profile?.topics ?? []) as TopicId[]
   );
 
@@ -128,8 +124,9 @@ export default async function JournalDayPage({ params }: Props) {
         <ThemeNetworkGraph graph={themeGraph} />
       </section>
 
-      <DayStoryPanel
-        dateKey={dateKey}
+      <PeriodStoryPanel
+        period="day"
+        periodKey={dateKey}
         initialStory={
           dayStory?.body ? sanitizeStoryProse(dayStory.body) : null
         }

@@ -1,14 +1,41 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import {
+  formatMonthLabel,
+  formatWeekRange,
+  formatLocalDateLong,
+  zonedLocalToUtc,
+} from "@/lib/datetime";
+import {
   groupEntriesByLocalDay,
   publishedEntries,
   wordCount,
 } from "@/lib/journal";
-import { formatLocalDateLong, zonedLocalToUtc } from "@/lib/datetime";
+import {
+  groupEntriesByLocalMonth,
+  groupEntriesByLocalWeek,
+} from "@/lib/journalPeriod";
+import {
+  JournalViewTabs,
+  type JournalView,
+} from "@/components/JournalViewTabs";
 import type { Entry } from "@/types/database";
 
-export default async function JournalPage() {
+export const dynamic = "force-dynamic";
+
+type Props = {
+  searchParams: Promise<{ view?: string }>;
+};
+
+function parseView(raw?: string): JournalView {
+  if (raw === "weeks" || raw === "months") return raw;
+  return "days";
+}
+
+export default async function JournalPage({ searchParams }: Props) {
+  const { view: viewParam } = await searchParams;
+  const view = parseView(viewParam);
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -20,7 +47,7 @@ export default async function JournalPage() {
     .select("*")
     .eq("user_id", user.id)
     .order("written_at", { ascending: false })
-    .limit(200);
+    .limit(500);
 
   const list = publishedEntries((entries ?? []) as Entry[]);
   const { data: profile } = await supabase
@@ -49,49 +76,141 @@ export default async function JournalPage() {
   }
 
   const days = groupEntriesByLocalDay(list, timeZone);
+  const weeks = groupEntriesByLocalWeek(list, timeZone);
+  const months = groupEntriesByLocalMonth(list, timeZone);
+
+  const blurb =
+    view === "weeks"
+      ? "Open a week for a theme map, woven story, and entries grouped by day."
+      : view === "months"
+        ? "Open a month for a longer story and how themes moved across the month."
+        : "Open a day for your theme map, a woven short story, and full entries.";
 
   return (
     <div className="space-y-6 pb-8">
-      <div>
+      <div className="space-y-4">
         <h1 className="font-serif text-3xl">Journal</h1>
-        <p className="mt-2 text-sm text-ink-muted">
-          Open a day for your timeline, a woven short story, and full entries.
-        </p>
+        <JournalViewTabs active={view} />
+        <p className="text-sm text-ink-muted">{blurb}</p>
       </div>
-      <ul className="space-y-4">
-        {days.map(({ dateKey, entries: dayEntries }) => {
-          const [y, mo, d] = dateKey.split("-").map(Number);
-          const dayDate = zonedLocalToUtc(y, mo, d, 12, 0, timeZone);
-          const preview = dayEntries[0];
-          const totalWords = dayEntries.reduce(
-            (n, e) => n + wordCount(e.body),
-            0
-          );
-          return (
-            <li key={dateKey}>
-              <Link
-                href={`/app/journal/${dateKey}`}
-                className="block rounded-2xl border border-ink-border bg-ink-surface p-5 hover:border-ink-accent/40 transition-colors"
-              >
-                <p className="font-serif text-xl">
-                  {formatLocalDateLong(dayDate, timeZone)}
-                </p>
-                <p className="mt-1 text-xs text-ink-muted uppercase tracking-wide">
-                  {dayEntries.length}{" "}
-                  {dayEntries.length === 1 ? "entry" : "entries"} · {totalWords}{" "}
-                  words
-                </p>
-                <p className="mt-2 text-sm text-ink-muted line-clamp-2">
-                  {preview.body.trim() || preview.prompt_text}
-                </p>
-                <p className="mt-2 text-xs text-ink-accent">
-                  View day → story & graph
-                </p>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
+
+      {view === "days" && (
+        <ul className="space-y-4">
+          {days.map(({ dateKey, entries: dayEntries }) => {
+            const [y, mo, d] = dateKey.split("-").map(Number);
+            const dayDate = zonedLocalToUtc(y, mo, d, 12, 0, timeZone);
+            const preview = dayEntries[0];
+            const totalWords = dayEntries.reduce(
+              (n, e) => n + wordCount(e.body),
+              0
+            );
+            return (
+              <li key={dateKey}>
+                <Link
+                  href={`/app/journal/${dateKey}`}
+                  className="block rounded-2xl border border-ink-border bg-ink-surface p-5 hover:border-ink-accent/40 transition-colors"
+                >
+                  <p className="font-serif text-xl">
+                    {formatLocalDateLong(dayDate, timeZone)}
+                  </p>
+                  <p className="mt-1 text-xs text-ink-muted uppercase tracking-wide">
+                    {dayEntries.length}{" "}
+                    {dayEntries.length === 1 ? "entry" : "entries"} ·{" "}
+                    {totalWords} words
+                  </p>
+                  <p className="mt-2 text-sm text-ink-muted line-clamp-2">
+                    {preview.body.trim() || preview.prompt_text}
+                  </p>
+                  <p className="mt-2 text-xs text-ink-accent">
+                    View day → story & graph
+                  </p>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {view === "weeks" && (
+        <ul className="space-y-4">
+          {weeks.map(({ weekStartKey, entries: weekEntries }) => {
+            const preview = weekEntries[weekEntries.length - 1];
+            const totalWords = weekEntries.reduce(
+              (n, e) => n + wordCount(e.body),
+              0
+            );
+            const dayCount = new Set(
+              weekEntries.map((e) =>
+                new Intl.DateTimeFormat("en-CA", {
+                  timeZone,
+                  year: "numeric",
+                  month: "2-digit",
+                  day: "2-digit",
+                }).format(new Date(e.written_at))
+              )
+            ).size;
+            return (
+              <li key={weekStartKey}>
+                <Link
+                  href={`/app/journal/week/${weekStartKey}`}
+                  className="block rounded-2xl border border-ink-border bg-ink-surface p-5 hover:border-ink-accent/40 transition-colors"
+                >
+                  <p className="font-serif text-xl">
+                    {formatWeekRange(weekStartKey, timeZone)}
+                  </p>
+                  <p className="mt-1 text-xs text-ink-muted uppercase tracking-wide">
+                    {weekEntries.length}{" "}
+                    {weekEntries.length === 1 ? "entry" : "entries"} ·{" "}
+                    {dayCount} {dayCount === 1 ? "day" : "days"} · {totalWords}{" "}
+                    words
+                  </p>
+                  <p className="mt-2 text-sm text-ink-muted line-clamp-2">
+                    {preview.body.trim() || preview.prompt_text}
+                  </p>
+                  <p className="mt-2 text-xs text-ink-accent">
+                    View week → story & graph
+                  </p>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {view === "months" && (
+        <ul className="space-y-4">
+          {months.map(({ monthKey, entries: monthEntries }) => {
+            const preview = monthEntries[monthEntries.length - 1];
+            const totalWords = monthEntries.reduce(
+              (n, e) => n + wordCount(e.body),
+              0
+            );
+            return (
+              <li key={monthKey}>
+                <Link
+                  href={`/app/journal/month/${monthKey}`}
+                  className="block rounded-2xl border border-ink-border bg-ink-surface p-5 hover:border-ink-accent/40 transition-colors"
+                >
+                  <p className="font-serif text-xl">
+                    {formatMonthLabel(monthKey, timeZone)}
+                  </p>
+                  <p className="mt-1 text-xs text-ink-muted uppercase tracking-wide">
+                    {monthEntries.length}{" "}
+                    {monthEntries.length === 1 ? "entry" : "entries"} ·{" "}
+                    {totalWords} words
+                  </p>
+                  <p className="mt-2 text-sm text-ink-muted line-clamp-2">
+                    {preview.body.trim() || preview.prompt_text}
+                  </p>
+                  <p className="mt-2 text-xs text-ink-accent">
+                    View month → story & graph
+                  </p>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }

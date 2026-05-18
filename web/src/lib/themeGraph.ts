@@ -51,6 +51,15 @@ type DayEntryInput = {
   topics_snapshot: string[];
   prompt_slot: string;
   nudgeLabel: string;
+  written_at: string;
+  /** Local YYYY-MM-DD when momentByDay is set. */
+  dayKey?: string;
+  dayLabel?: string;
+};
+
+export type ThemeGraphOptions = {
+  /** Group nudge nodes by calendar day (better for week/month views). */
+  momentByDay?: boolean;
 };
 
 function topicLabel(id: TopicId): string {
@@ -154,7 +163,8 @@ function relaxPositions(
 
 export function buildDayThemeGraph(
   entries: DayEntryInput[],
-  profileTopics: string[] = []
+  profileTopics: string[] = [],
+  options: ThemeGraphOptions = {}
 ): DayThemeGraph {
   const profile = profileTopics.filter((t): t is TopicId => isValidTopicId(t));
   const topicWeight = new Map<string, number>();
@@ -170,7 +180,9 @@ export function buildDayThemeGraph(
     const topics = topicsForEntry(entry, profile);
     chronology.push(topics);
 
-    const momentId = `moment:${entry.prompt_slot}`;
+    const momentId = options.momentByDay
+      ? `day:${entry.dayKey ?? entry.written_at.slice(0, 10)}`
+      : `moment:${entry.prompt_slot}`;
     momentWeight.set(momentId, (momentWeight.get(momentId) ?? 0) + 1);
 
     for (const t of topics) {
@@ -239,9 +251,14 @@ export function buildDayThemeGraph(
     }),
     ...momentIds.map((id) => {
       const p = momentPos.get(id)!;
-      const slot = id.replace("moment:", "");
-      const label =
-        entries.find((e) => e.prompt_slot === slot)?.nudgeLabel ?? slot;
+      const label = options.momentByDay
+        ? id.replace("day:", "")
+        : (() => {
+            const slot = id.replace("moment:", "");
+            return (
+              entries.find((e) => e.prompt_slot === slot)?.nudgeLabel ?? slot
+            );
+          })();
       return {
         id,
         label,

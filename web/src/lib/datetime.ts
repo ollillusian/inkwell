@@ -128,7 +128,7 @@ export function formatLocalNowForLLM(date: Date, timeZone: string): string {
   }).format(date);
 }
 
-function addDaysToDateKey(dateKey: string, days: number): string {
+export function addDaysToDateKey(dateKey: string, days: number): string {
   const [y, mo, d] = dateKey.split("-").map(Number);
   const utc = Date.UTC(y, mo - 1, d + days);
   const nd = new Date(utc);
@@ -154,6 +154,78 @@ export function localDayUtcBoundsForDateKey(
     start: start.toISOString(),
     end: end.toISOString(),
   };
+}
+
+const WEEKDAY_FROM_MONDAY: Record<string, number> = {
+  Monday: 0,
+  Tuesday: 1,
+  Wednesday: 2,
+  Thursday: 3,
+  Friday: 4,
+  Saturday: 5,
+  Sunday: 6,
+};
+
+/** Monday-start week containing this instant (local calendar). */
+export function localWeekStartKey(date: Date, timeZone: string): string {
+  const dateKey = localDateKey(date, timeZone);
+  const [y, mo, d] = dateKey.split("-").map(Number);
+  const at = zonedLocalToUtc(y, mo, d, 12, 0, timeZone);
+  const weekday = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    weekday: "long",
+  }).format(at);
+  const offset = WEEKDAY_FROM_MONDAY[weekday] ?? 0;
+  return addDaysToDateKey(dateKey, -offset);
+}
+
+export function localMonthKey(date: Date, timeZone: string): string {
+  const { year, month } = localTimeParts(date, timeZone);
+  return `${year}-${month}`;
+}
+
+export function weekDateKeys(weekStartKey: string): string[] {
+  return Array.from({ length: 7 }, (_, i) => addDaysToDateKey(weekStartKey, i));
+}
+
+export function monthDateKeys(monthKey: string): string[] {
+  const [y, mo] = monthKey.split("-").map(Number);
+  const lastDay = new Date(Date.UTC(y, mo, 0)).getUTCDate();
+  return Array.from({ length: lastDay }, (_, i) => {
+    const day = String(i + 1).padStart(2, "0");
+    const month = String(mo).padStart(2, "0");
+    return `${y}-${month}-${day}`;
+  });
+}
+
+export function formatWeekRange(weekStartKey: string, timeZone: string): string {
+  const endKey = addDaysToDateKey(weekStartKey, 6);
+  const [ys, ms, ds] = weekStartKey.split("-").map(Number);
+  const [ye, me, de] = endKey.split("-").map(Number);
+  const start = zonedLocalToUtc(ys, ms, ds, 12, 0, timeZone);
+  const end = zonedLocalToUtc(ye, me, de, 12, 0, timeZone);
+  const startFmt = new Intl.DateTimeFormat(undefined, {
+    timeZone,
+    month: "short",
+    day: "numeric",
+  }).format(start);
+  const endFmt = new Intl.DateTimeFormat(undefined, {
+    timeZone,
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(end);
+  return `${startFmt} – ${endFmt}`;
+}
+
+export function formatMonthLabel(monthKey: string, timeZone: string): string {
+  const [y, mo] = monthKey.split("-").map(Number);
+  const at = zonedLocalToUtc(y, mo, 15, 12, 0, timeZone);
+  return new Intl.DateTimeFormat(undefined, {
+    timeZone,
+    month: "long",
+    year: "numeric",
+  }).format(at);
 }
 
 export function localDayUtcBounds(

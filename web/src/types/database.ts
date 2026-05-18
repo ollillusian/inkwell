@@ -40,3 +40,14 @@ export type DayStory = {
   entry_ids: string[];
   created_at: string;
 };
+
+export type PeriodStory = {
+  id: string;
+  user_id: string;
+  period_type: "week" | "month";
+  period_key: string;
+  body: string;
+  entry_ids: string[];
+  created_at: string;
+  updated_at: string;
+};
