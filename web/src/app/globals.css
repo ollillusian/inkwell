@@ -29,3 +29,26 @@ body {
 .font-serif {
   font-family: var(--font-cormorant), Georgia, serif;
 }
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-graph-svg .theme-graph-edge {
+    opacity: 0;
+    animation: inkwell-graph-edge 0.85s ease forwards;
+  }
+  .theme-graph-svg .theme-graph-node {
+    opacity: 0;
+    animation: inkwell-graph-node 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+}
+
+@keyframes inkwell-graph-edge {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes inkwell-graph-node {
+  to {
+    opacity: 1;
+  }
+}
