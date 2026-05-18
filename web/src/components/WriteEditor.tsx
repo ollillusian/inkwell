@@ -19,6 +19,16 @@ type Props = {
 
 type DraftStatus = "idle" | "saving" | "saved" | "error";
 
+function isMissingDraftColumnError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const maybeError = error as { code?: string; message?: string };
+  return (
+    maybeError.code === "PGRST204" ||
+    maybeError.code === "42703" ||
+    Boolean(maybeError.message?.includes("is_draft"))
+  );
+}
+
 export function WriteEditor({
   promptText,
   nudgeId,
@@ -52,11 +62,14 @@ export function WriteEditor({
       } = await supabase.auth.getUser();
       if (!user) return null;
 
-      const payload = {
+      const basePayload = {
         prompt_text: promptText,
         prompt_slot: nudgeId,
         body: bodyToSave,
         topics_snapshot: topicsSnapshot,
+      };
+      const payload = {
+        ...basePayload,
         is_draft: isDraft,
       };
 
@@ -77,7 +90,35 @@ export function WriteEditor({
             .select("id")
             .single();
 
-      if (error) throw error;
+      if (error) {
+        if (isMissingDraftColumnError(error) && !isDraft) {
+          const fallback = existingEntryId
+            ? await supabase
+                .from("entries")
+                .update(basePayload)
+                .eq("id", existingEntryId)
+                .eq("user_id", user.id)
+                .select("id")
+                .single()
+            : await supabase
+                .from("entries")
+                .insert({
+                  ...basePayload,
+                  user_id: user.id,
+                })
+                .select("id")
+                .single();
+
+          if (fallback.error) throw fallback.error;
+          const fallbackEntryId = fallback.data?.id as string | undefined;
+          if (!fallbackEntryId) return null;
+          currentEntryIdRef.current = fallbackEntryId;
+          setCurrentEntryId(fallbackEntryId);
+          return fallbackEntryId;
+        }
+
+        throw error;
+      }
       const savedEntryId = data?.id as string | undefined;
       if (!savedEntryId) return null;
 

@@ -15,11 +15,12 @@ export default async function JournalPage() {
     .from("entries")
     .select("*")
     .eq("user_id", user.id)
-    .eq("is_draft", false)
     .order("written_at", { ascending: false })
     .limit(50);
 
-  const list = (entries ?? []) as Entry[];
+  const list = ((entries ?? []) as Entry[]).filter(
+    (entry) => entry.is_draft !== true
+  );
   const { data: profile } = await supabase
     .from("profiles")
     .select("nudge_schedule, morning_time, midday_time, evening_time")

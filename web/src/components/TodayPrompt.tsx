@@ -69,15 +69,14 @@ export async function TodayPrompt({ userId }: { userId: string }) {
   );
 
   const { start, end } = localDayUtcBounds(timeZone, now);
-  const { data: todayEntry } = await supabase
+  const { data: todayEntries } = await supabase
     .from("entries")
-    .select("id")
+    .select("*")
     .eq("user_id", userId)
     .eq("prompt_slot", target.id)
-    .eq("is_draft", false)
     .gte("written_at", start)
-    .lte("written_at", end)
-    .maybeSingle();
+    .lte("written_at", end);
+  const todayEntry = todayEntries?.find((entry) => entry.is_draft !== true);
 
   const baseMinutes =
     parseInt(target.baseTime.split(":")[0], 10) * 60 +
