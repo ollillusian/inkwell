@@ -7,11 +7,11 @@ export function wordCount(text: string): number {
   return trimmed.split(/\s+/).length;
 }
 
-/** True when the user saved real prose to the journal (not an autosave draft). */
+/** True when the user tapped Save to journal (explicit publish, not autosave draft). */
 export function isPublishedEntry(
   entry: Pick<Entry, "is_draft" | "body">
 ): boolean {
-  return entry.is_draft !== true && Boolean(entry.body?.trim());
+  return entry.is_draft === false && Boolean(entry.body?.trim());
 }
 
 /** Saved journal entries (excludes in-progress autosave drafts and empty bodies). */

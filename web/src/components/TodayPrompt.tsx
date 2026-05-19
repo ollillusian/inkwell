@@ -149,16 +149,25 @@ export async function TodayPrompt({ userId }: { userId: string }) {
       <HumanOnlyBanner compact />
 
       {publishedId ? (
-        <div className="rounded-2xl border border-ink-border bg-ink-surface px-5 py-4">
+        <div className="rounded-2xl border border-ink-border bg-ink-surface px-5 py-4 space-y-3">
           <p className="text-sm text-ink-muted">
-            You saved an entry for this nudge today.
+            You already saved to your journal for this nudge today (after tapping
+            &quot;Save to journal&quot;).
           </p>
-          <Link
-            href="/app/journal"
-            className="inline-block mt-3 text-sm font-medium text-ink-accent"
-          >
-            View journal →
-          </Link>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <Link
+              href="/app/journal"
+              className="flex-1 text-center rounded-full border border-ink-border px-4 py-2.5 text-sm font-medium hover:bg-ink-bg transition-colors"
+            >
+              View journal
+            </Link>
+            <Link
+              href={writeHref}
+              className="flex-1 text-center rounded-full bg-ink-fg text-ink-bg px-4 py-2.5 text-sm font-medium hover:opacity-90 transition-opacity"
+            >
+              Write again
+            </Link>
+          </div>
         </div>
       ) : timing === "upcoming" ? (
         <div className="space-y-3">
