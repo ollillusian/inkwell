@@ -81,6 +81,22 @@ export function formatMinutesLocal(
   return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
+/** Human-readable wait until a wall-clock nudge time today (local). */
+export function formatMinutesUntil(
+  now: Date,
+  targetMinutes: number,
+  timeZone: string
+): string {
+  const nowM = localMinutesSinceMidnight(now, timeZone);
+  const diff = targetMinutes - nowM;
+  if (diff <= 0) return "now";
+  if (diff < 60) return `in ${diff} min`;
+  const h = Math.floor(diff / 60);
+  const m = diff % 60;
+  if (m === 0) return h === 1 ? "in 1 hr" : `in ${h} hr`;
+  return h === 1 ? `in 1 hr ${m} min` : `in ${h} hr ${m} min`;
+}
+
 export function formatLocalDateLong(date: Date, timeZone: string): string {
   return new Intl.DateTimeFormat(undefined, {
     timeZone,

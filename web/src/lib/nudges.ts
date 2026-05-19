@@ -247,6 +247,30 @@ export function nextUpcomingNudge(
   return resolved.find((n) => n.effectiveMinutes > nowM) ?? null;
 }
 
+/** Most recent nudge whose fire time has already passed today. */
+export function lastPassedNudge(
+  resolved: ResolvedNudge[],
+  timeZone: string,
+  now: Date = new Date()
+): ResolvedNudge | null {
+  const nowM = localMinutesSinceMidnight(now, timeZone);
+  const passed = resolved.filter((n) => n.effectiveMinutes <= nowM);
+  return passed.at(-1) ?? null;
+}
+
+export type NudgeTimingState = "open" | "upcoming" | "passed";
+
+export function nudgeTimingState(
+  nudge: ResolvedNudge,
+  timeZone: string,
+  now: Date = new Date()
+): NudgeTimingState {
+  const nowM = localMinutesSinceMidnight(now, timeZone);
+  if (nudge.effectiveMinutes > nowM) return "upcoming";
+  if (nowM - nudge.effectiveMinutes <= 120) return "open";
+  return "passed";
+}
+
 export function newNudgeId(): string {
   return `nudge-${Date.now().toString(36)}`;
 }
