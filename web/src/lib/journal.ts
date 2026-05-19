@@ -7,9 +7,16 @@ export function wordCount(text: string): number {
   return trimmed.split(/\s+/).length;
 }
 
-/** Saved journal entries (excludes in-progress autosave drafts). */
+/** True when the user saved real prose to the journal (not an autosave draft). */
+export function isPublishedEntry(
+  entry: Pick<Entry, "is_draft" | "body">
+): boolean {
+  return entry.is_draft !== true && Boolean(entry.body?.trim());
+}
+
+/** Saved journal entries (excludes in-progress autosave drafts and empty bodies). */
 export function publishedEntries(entries: Entry[]): Entry[] {
-  return entries.filter((e) => !e.is_draft);
+  return entries.filter(isPublishedEntry);
 }
 
 /** Same calendar day as the journal list uses (profile timezone). */

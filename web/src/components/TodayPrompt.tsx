@@ -5,6 +5,7 @@ import {
   formatMinutesLocal,
   localDayUtcBounds,
 } from "@/lib/datetime";
+import { nudgeEntryStatusForDay } from "@/lib/entryStatus";
 import { getDailyPrompt, profileVoice } from "@/lib/prompts/getDailyPrompt";
 import type { TopicId } from "@/lib/promptEngine";
 import {
@@ -69,14 +70,15 @@ export async function TodayPrompt({ userId }: { userId: string }) {
   );
 
   const { start, end } = localDayUtcBounds(timeZone, now);
-  const { data: todayEntries } = await supabase
-    .from("entries")
-    .select("*")
-    .eq("user_id", userId)
-    .eq("prompt_slot", target.id)
-    .gte("written_at", start)
-    .lte("written_at", end);
-  const todayEntry = todayEntries?.find((entry) => entry.is_draft !== true);
+  const { publishedId, draftId } = await nudgeEntryStatusForDay(
+    supabase,
+    userId,
+    target.id,
+    start,
+    end
+  );
+
+  const writeHref = `/app/write?nudge=${encodeURIComponent(target.id)}`;
 
   const baseMinutes =
     parseInt(target.baseTime.split(":")[0], 10) * 60 +
@@ -110,10 +112,10 @@ export async function TodayPrompt({ userId }: { userId: string }) {
 
       <HumanOnlyBanner compact />
 
-      {todayEntry ? (
+      {publishedId ? (
         <div className="rounded-2xl border border-ink-border bg-ink-surface px-5 py-4">
           <p className="text-sm text-ink-muted">
-            You already wrote for this nudge today.
+            You saved an entry for this nudge today.
           </p>
           <Link
             href="/app/journal"
@@ -122,9 +124,21 @@ export async function TodayPrompt({ userId }: { userId: string }) {
             View journal →
           </Link>
         </div>
+      ) : draftId ? (
+        <div className="rounded-2xl border border-ink-border bg-ink-surface px-5 py-4 space-y-3">
+          <p className="text-sm text-ink-muted">
+            You have an unsaved draft for this nudge — not in your journal yet.
+          </p>
+          <Link
+            href={writeHref}
+            className="flex w-full justify-center rounded-full bg-ink-fg text-ink-bg py-3.5 font-medium hover:opacity-90 transition-opacity"
+          >
+            Continue draft
+          </Link>
+        </div>
       ) : (
         <Link
-          href={`/app/write?nudge=${encodeURIComponent(target.id)}`}
+          href={writeHref}
           className="flex w-full justify-center rounded-full bg-ink-fg text-ink-bg py-4 font-medium hover:opacity-90 transition-opacity"
         >
           Start writing
