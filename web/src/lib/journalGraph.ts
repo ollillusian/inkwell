@@ -15,6 +15,7 @@ export function entriesToThemeGraphInput(
       prompt_slot: e.prompt_slot,
       nudgeLabel: resolveLabel(e.prompt_slot),
       written_at: e.written_at,
+      body: e.body ?? "",
       dayKey,
       dayLabel: formatLocalDateMedium(new Date(e.written_at), timeZone),
     };

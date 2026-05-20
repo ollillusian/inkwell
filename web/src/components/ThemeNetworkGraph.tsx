@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useId, useMemo, useState } from "react";
+import {
+  useCallback,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent,
+  type WheelEvent,
+} from "react";
 import type {
   DayThemeGraph,
   ThemeGraphEdge,
@@ -11,35 +19,35 @@ type Props = {
   graph: DayThemeGraph;
 };
 
+/** Subtle curve so edges don't stack on identical paths. */
 function edgePath(
   x1: number,
   y1: number,
   x2: number,
   y2: number,
-  cx: number,
-  cy: number,
   bend: number
 ): string {
   const mx = (x1 + x2) / 2;
   const my = (y1 + y2) / 2;
-  const cpx = mx + (cx - mx) * bend;
-  const cpy = my + (cy - my) * bend;
-  return `M ${x1} ${y1} Q ${cpx} ${cpy} ${x2} ${y2}`;
+  const dx = x2 - x1;
+  const dy = y2 - y1;
+  const len = Math.hypot(dx, dy) || 1;
+  const ox = (-dy / len) * 8 * bend;
+  const oy = (dx / len) * 8 * bend;
+  return `M ${x1} ${y1} Q ${mx + ox} ${my + oy} ${x2} ${y2}`;
 }
 
 function edgeMeta(edge: ThemeGraphEdge, maxWeight: number) {
   const t = edge.weight / maxWeight;
   return {
-    strokeWidth: 0.75 + t * 2,
-    bend:
-      edge.kind === "cooccur" ? 0.2 : edge.kind === "flow" ? 0.32 : 0.1,
-    dash: edge.kind === "flow" ? "5 6" : undefined,
-    label:
+    strokeWidth: 0.65 + t * 2.1,
+    bend: edge.kind === "cooccur" ? 0.9 : edge.kind === "flow" ? 1.1 : 0.35,
+    dash:
       edge.kind === "flow"
-        ? "Carried from one entry to the next"
-        : edge.kind === "cooccur"
-          ? "Appeared in the same entry"
-          : "Linked to this moment",
+        ? "5 6"
+        : edge.kind === "phrase"
+          ? "2 4"
+          : undefined,
   };
 }
 
@@ -62,17 +70,37 @@ function edgeKindLabel(kind: ThemeGraphEdge["kind"]): string {
       return "Flow between entries";
     case "cooccur":
       return "Same entry";
+    case "phrase":
+      return "Recurring phrase";
     default:
       return "Moment link";
   }
 }
 
+function clientToSvg(svg: SVGSVGElement, clientX: number, clientY: number) {
+  const pt = svg.createSVGPoint();
+  pt.x = clientX;
+  pt.y = clientY;
+  const m = svg.getScreenCTM();
+  if (!m) return { x: clientX, y: clientY };
+  return pt.matrixTransform(m.inverse());
+}
+
 export function ThemeNetworkGraph({ graph }: Props) {
   const uid = useId().replace(/:/g, "");
+  const svgRef = useRef<SVGSVGElement | null>(null);
   const { nodes, edges, width, height, centerX, centerY } = graph;
 
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [rotate, setRotate] = useState(0);
+  const dragRef = useRef<{
+    id: number;
+    last: { x: number; y: number };
+  } | null>(null);
 
   const activeId = selectedId ?? hoveredId;
 
@@ -127,6 +155,12 @@ export function ThemeNetworkGraph({ graph }: Props) {
     setSelectedId(null);
   }, []);
 
+  const resetView = useCallback(() => {
+    setPan({ x: 0, y: 0 });
+    setZoom(1);
+    setRotate(0);
+  }, []);
+
   const activeNode: ThemeGraphNode | null = activeId
     ? (nodeById.get(activeId) ?? null)
     : null;
@@ -138,6 +172,60 @@ export function ThemeNetworkGraph({ graph }: Props) {
     );
   }, [activeId, edges]);
 
+  const onWheel = useCallback((e: WheelEvent<SVGSVGElement>) => {
+    e.preventDefault();
+    const factor = e.deltaY > 0 ? 0.92 : 1.08;
+    setZoom((z) => Math.min(3.2, Math.max(0.35, z * factor)));
+  }, []);
+
+  const startPan = useCallback((e: PointerEvent<SVGSVGElement>) => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    svg.setPointerCapture(e.pointerId);
+    const p = clientToSvg(svg, e.clientX, e.clientY);
+    dragRef.current = {
+      id: e.pointerId,
+      last: p,
+    };
+  }, []);
+
+  const onSvgPointerDown = useCallback(
+    (e: PointerEvent<SVGSVGElement>) => {
+      const svg = svgRef.current;
+      if (!svg || e.button !== 0) return;
+      const target = e.target as Element;
+      if (
+        target.closest(".theme-graph-node") ||
+        target.closest("button")
+      ) {
+        return;
+      }
+      startPan(e);
+    },
+    [startPan]
+  );
+
+  const onSvgPointerMove = useCallback(
+    (e: PointerEvent<SVGSVGElement>) => {
+      const svg = svgRef.current;
+      const d = dragRef.current;
+      if (!svg || !d || d.id !== e.pointerId) return;
+      const p = clientToSvg(svg, e.clientX, e.clientY);
+      setPan((prev) => ({
+        x: prev.x + (p.x - d.last.x),
+        y: prev.y + (p.y - d.last.y),
+      }));
+      d.last = p;
+    },
+    []
+  );
+
+  const endPan = useCallback((e: PointerEvent<SVGSVGElement>) => {
+    if (dragRef.current?.id === e.pointerId) dragRef.current = null;
+  }, []);
+
+  const contentTransform = `translate(${pan.x} ${pan.y}) translate(${centerX} ${centerY}) rotate(${rotate}) scale(${zoom}) translate(${-centerX} ${-centerY})`;
+
   if (nodes.length === 0) {
     return (
       <figure className="rounded-2xl border border-ink-border bg-ink-surface/60 px-6 py-12 text-center">
@@ -148,43 +236,100 @@ export function ThemeNetworkGraph({ graph }: Props) {
 
   const topicNodes = nodes.filter((n) => n.kind === "topic");
   const momentNodes = nodes.filter((n) => n.kind === "moment");
+  const signalNodes = nodes.filter((n) => n.kind === "signal");
 
   return (
     <figure className="overflow-hidden rounded-2xl border border-ink-border bg-ink-surface/90">
       <div className="px-4 pt-4 pb-2 flex flex-wrap items-start justify-between gap-3">
         <p className="text-xs text-ink-muted leading-relaxed max-w-md">
-          Tap or hover a theme or moment to see how your entries connect. Lines
-          thicken where links are stronger.
+          Themes use your entry text plus onboarding labels. Phrases appear when
+          the same wording shows up in multiple entries. Drag the background to
+          pan; scroll to zoom; use the arrows to rotate.
         </p>
-        <div className="flex gap-4 text-[10px] text-ink-muted shrink-0">
-          <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full border-2 border-ink-accent bg-ink-accent/25" />
-            Theme
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full border border-ink-muted bg-ink-bg" />
-            Moment
-          </span>
+        <div className="flex flex-wrap gap-2 items-center justify-end shrink-0">
+          <div className="flex gap-1">
+            <button
+              type="button"
+              aria-label="Zoom out"
+              className="rounded-lg border border-ink-border px-2 py-1 text-xs text-ink-fg hover:bg-ink-bg"
+              onClick={() =>
+                setZoom((z) => Math.max(0.35, z / 1.12))
+              }
+            >
+              −
+            </button>
+            <button
+              type="button"
+              aria-label="Zoom in"
+              className="rounded-lg border border-ink-border px-2 py-1 text-xs text-ink-fg hover:bg-ink-bg"
+              onClick={() =>
+                setZoom((z) => Math.min(3.2, z * 1.12))
+              }
+            >
+              +
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-ink-border px-2 py-1 text-xs text-ink-fg hover:bg-ink-bg"
+              onClick={() => setRotate((r) => r - 15)}
+            >
+              ↺
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-ink-border px-2 py-1 text-xs text-ink-fg hover:bg-ink-bg"
+              onClick={() => setRotate((r) => r + 15)}
+            >
+              ↻
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-ink-border px-2 py-1 text-xs text-ink-muted hover:bg-ink-bg"
+              onClick={resetView}
+            >
+              Reset
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-3 text-[10px] text-ink-muted">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded-full border-2 border-ink-accent bg-ink-accent/25" />
+              Theme
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full border border-ink-muted bg-ink-bg" />
+              Moment
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-sm border border-dashed border-ink-fg/35 bg-ink-bg" />
+              Phrase
+            </span>
+          </div>
         </div>
       </div>
 
       <div
-        className="relative touch-pan-y"
+        className="relative touch-pan-y cursor-grab active:cursor-grabbing"
         onMouseLeave={() => setHoveredId(null)}
       >
         <svg
+          ref={svgRef}
           viewBox={`0 0 ${width} ${height}`}
-          className="w-full h-auto block theme-graph-svg select-none"
+          className="w-full h-auto block theme-graph-svg select-none touch-manipulation [touch-action:none]"
           role="img"
-          aria-label="Interactive map of journal themes and how they connect"
+          aria-label="Interactive map of journal themes and phrases"
+          onWheel={onWheel}
+          onPointerDown={onSvgPointerDown}
+          onPointerMove={onSvgPointerMove}
+          onPointerUp={endPan}
+          onPointerCancel={endPan}
           onClick={(e) => {
             if (e.target === e.currentTarget) clearSelection();
           }}
         >
           <defs>
-            <radialGradient id={`${uid}-wash`} cx="50%" cy="48%" r="52%">
-              <stop offset="0%" stopColor="var(--ink-surface)" stopOpacity="0.9" />
-              <stop offset="100%" stopColor="var(--ink-bg)" stopOpacity="0" />
+            <radialGradient id={`${uid}-wash`} cx="50%" cy="48%" r="62%">
+              <stop offset="0%" stopColor="var(--ink-surface)" stopOpacity="0.85" />
+              <stop offset="100%" stopColor="var(--ink-bg)" stopOpacity="0.15" />
             </radialGradient>
           </defs>
 
@@ -194,206 +339,257 @@ export function ThemeNetworkGraph({ graph }: Props) {
             fill={`url(#${uid}-wash)`}
             className="pointer-events-none"
           />
-          <circle
-            cx={centerX}
-            cy={centerY}
-            r={24}
-            fill="none"
-            stroke="var(--ink-border)"
-            strokeWidth={0.75}
-            strokeOpacity={0.65}
-            strokeDasharray="3 5"
-            className="pointer-events-none"
-          />
 
-          <g className="theme-graph-edges pointer-events-none">
-            {edges.map((edge, i) => {
-              const a = pos.get(edge.source);
-              const b = pos.get(edge.target);
-              if (!a || !b) return null;
-              const meta = edgeMeta(edge, maxEdge);
-              const lit = isEdgeLit(edge);
-              const t = edge.weight / maxEdge;
-              return (
-                <path
-                  key={`${edge.source}-${edge.target}-${edge.kind}`}
-                  d={edgePath(
-                    a.x,
-                    a.y,
-                    b.x,
-                    b.y,
-                    centerX,
-                    centerY,
-                    meta.bend
-                  )}
-                  fill="none"
-                  stroke={
-                    lit && activeId
-                      ? "var(--ink-accent)"
-                      : "var(--ink-border)"
-                  }
-                  strokeWidth={lit ? meta.strokeWidth : meta.strokeWidth * 0.65}
-                  strokeOpacity={
-                    lit ? 0.22 + t * 0.45 : highlightIds ? 0.08 : 0.18 + t * 0.28
-                  }
-                  strokeDasharray={meta.dash}
-                  strokeLinecap="round"
-                  className="theme-graph-edge transition-[stroke,stroke-opacity,stroke-width] duration-200"
-                  style={{ animationDelay: `${i * 35}ms` }}
-                />
-              );
-            })}
-          </g>
-
-          <g className="theme-graph-nodes">
-            {momentNodes.map((node, i) => {
-              const r = 5 + (node.weight / maxNode) * 3;
-              const lit = isNodeLit(node.id);
-              const isActive = activeId === node.id;
-              const labelY = node.y + r + 11;
-
-              return (
-                <g
-                  key={node.id}
-                  className={`theme-graph-node cursor-pointer outline-none${lit ? "" : " theme-graph-node-dim"}`}
-                  style={{ animationDelay: `${100 + i * 50}ms` }}
-                  onMouseEnter={() => setHoveredId(node.id)}
-                  onMouseLeave={() =>
-                    setHoveredId((h) => (h === node.id ? null : h))
-                  }
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    selectNode(node.id);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      selectNode(node.id);
-                    }
-                  }}
-                  role="button"
-                  tabIndex={0}
-                  aria-pressed={selectedId === node.id}
-                  aria-label={`${node.label}, ${node.weight} ${node.weight === 1 ? "entry" : "entries"}`}
-                >
-                  <circle
-                    cx={node.x}
-                    cy={node.y}
-                    r={r + 14}
-                    fill="transparent"
-                  />
-                  {isActive && (
-                    <circle
-                      cx={node.x}
-                      cy={node.y}
-                      r={r + 10}
-                      fill="none"
-                      stroke="var(--ink-accent)"
-                      strokeWidth={1}
-                      strokeOpacity={0.35}
-                    />
-                  )}
-                  <circle
-                    cx={node.x}
-                    cy={node.y}
-                    r={r}
-                    fill="var(--ink-bg)"
+          <g transform={contentTransform}>
+            <g className="theme-graph-edges pointer-events-none">
+              {edges.map((edge, i) => {
+                const a = pos.get(edge.source);
+                const b = pos.get(edge.target);
+                if (!a || !b) return null;
+                const meta = edgeMeta(edge, maxEdge);
+                const lit = isEdgeLit(edge);
+                const t = edge.weight / maxEdge;
+                return (
+                  <path
+                    key={`${edge.source}-${edge.target}-${edge.kind}`}
+                    d={edgePath(a.x, a.y, b.x, b.y, meta.bend)}
+                    fill="none"
                     stroke={
-                      isActive ? "var(--ink-accent)" : "var(--ink-muted)"
+                      lit && activeId
+                        ? "var(--ink-accent)"
+                        : "var(--ink-border)"
                     }
-                    strokeWidth={isActive ? 1.75 : 1.25}
+                    strokeWidth={
+                      lit ? meta.strokeWidth : meta.strokeWidth * 0.65
+                    }
+                    strokeOpacity={
+                      lit
+                        ? 0.2 + t * 0.42
+                        : highlightIds
+                          ? 0.06
+                          : 0.14 + t * 0.26
+                    }
+                    strokeDasharray={meta.dash}
+                    strokeLinecap="round"
+                    className="theme-graph-edge transition-[stroke,stroke-opacity,stroke-width] duration-200"
+                    style={{ animationDelay: `${i * 30}ms` }}
                   />
-                  <text
-                    x={node.x}
-                    y={labelY}
-                    textAnchor="middle"
-                    fill="var(--ink-muted)"
-                    className="font-sans pointer-events-none"
-                    style={{
-                      fontSize: 8.5,
-                      opacity: lit ? 1 : 0.5,
-                    }}
-                  >
-                    {node.shortLabel}
-                  </text>
-                </g>
-              );
-            })}
+                );
+              })}
+            </g>
 
-            {topicNodes.map((node, i) => {
-              const r = 14 + (node.weight / maxNode) * 8;
-              const lit = isNodeLit(node.id);
-              const isActive = activeId === node.id;
-              const labelY = node.y + r + 13;
-
-              return (
-                <g
-                  key={node.id}
-                  className={`theme-graph-node cursor-pointer outline-none${lit ? "" : " theme-graph-node-dim"}`}
-                  style={{ animationDelay: `${60 + i * 55}ms` }}
-                  onMouseEnter={() => setHoveredId(node.id)}
-                  onMouseLeave={() =>
-                    setHoveredId((h) => (h === node.id ? null : h))
-                  }
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    selectNode(node.id);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
+            <g className="theme-graph-nodes">
+              {signalNodes.map((node, i) => {
+                const s = 4 + (node.weight / maxNode) * 3;
+                const lit = isNodeLit(node.id);
+                const isActive = activeId === node.id;
+                const labelY = node.y + s + 12;
+                return (
+                  <g
+                    key={node.id}
+                    className={`theme-graph-node cursor-pointer outline-none${lit ? "" : " theme-graph-node-dim"}`}
+                    style={{ animationDelay: `${40 + i * 40}ms` }}
+                    onMouseEnter={() => setHoveredId(node.id)}
+                    onMouseLeave={() =>
+                      setHoveredId((h) => (h === node.id ? null : h))
+                    }
+                    onClick={(ev) => {
+                      ev.stopPropagation();
                       selectNode(node.id);
+                    }}
+                    onKeyDown={(ev) => {
+                      if (ev.key === "Enter" || ev.key === " ") {
+                        ev.preventDefault();
+                        selectNode(node.id);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={selectedId === node.id}
+                    aria-label={`Phrase: ${node.label}`}
+                  >
+                    <rect
+                      x={node.x - s - 12}
+                      y={node.y - s - 12}
+                      width={(s + 12) * 2}
+                      height={(s + 12) * 2}
+                      fill="transparent"
+                    />
+                    <rect
+                      x={node.x - s}
+                      y={node.y - s}
+                      width={s * 2}
+                      height={s * 2}
+                      rx={2}
+                      fill="var(--ink-bg)"
+                      stroke={isActive ? "var(--ink-accent)" : node.color}
+                      strokeWidth={isActive ? 1.5 : 1}
+                      strokeDasharray="3 2"
+                    />
+                    <text
+                      x={node.x}
+                      y={labelY}
+                      textAnchor="middle"
+                      fill="var(--ink-muted)"
+                      className="font-sans pointer-events-none"
+                      style={{
+                        fontSize: 8,
+                        opacity: lit ? 1 : 0.45,
+                      }}
+                    >
+                      {node.shortLabel}
+                    </text>
+                  </g>
+                );
+              })}
+
+              {momentNodes.map((node, i) => {
+                const r = 5 + (node.weight / maxNode) * 3;
+                const lit = isNodeLit(node.id);
+                const isActive = activeId === node.id;
+                const labelY = node.y + r + 11;
+                return (
+                  <g
+                    key={node.id}
+                    className={`theme-graph-node cursor-pointer outline-none${lit ? "" : " theme-graph-node-dim"}`}
+                    style={{ animationDelay: `${80 + i * 45}ms` }}
+                    onMouseEnter={() => setHoveredId(node.id)}
+                    onMouseLeave={() =>
+                      setHoveredId((h) => (h === node.id ? null : h))
                     }
-                  }}
-                  role="button"
-                  tabIndex={0}
-                  aria-pressed={selectedId === node.id}
-                  aria-label={`${node.label}, ${node.weight} ${node.weight === 1 ? "mention" : "mentions"}`}
-                >
-                  <circle
-                    cx={node.x}
-                    cy={node.y}
-                    r={r + 16}
-                    fill="transparent"
-                  />
-                  {isActive && (
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                      selectNode(node.id);
+                    }}
+                    onKeyDown={(ev) => {
+                      if (ev.key === "Enter" || ev.key === " ") {
+                        ev.preventDefault();
+                        selectNode(node.id);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={selectedId === node.id}
+                    aria-label={`${node.label}, ${node.weight} ${node.weight === 1 ? "entry" : "entries"}`}
+                  >
                     <circle
                       cx={node.x}
                       cy={node.y}
-                      r={r + 12}
-                      fill={node.color}
-                      fillOpacity={0.12}
-                      stroke={node.color}
-                      strokeWidth={1}
-                      strokeOpacity={0.4}
+                      r={r + 14}
+                      fill="transparent"
                     />
-                  )}
-                  <circle
-                    cx={node.x}
-                    cy={node.y}
-                    r={r}
-                    fill={node.color}
-                    fillOpacity={isActive ? 0.28 : 0.18}
-                    stroke={node.color}
-                    strokeWidth={isActive ? 2.25 : 1.75}
-                  />
-                  <text
-                    x={node.x}
-                    y={labelY}
-                    textAnchor="middle"
-                    fill="var(--ink-fg)"
-                    className="font-sans pointer-events-none"
-                    style={{
-                      fontSize: 9,
-                      fontWeight: isActive ? 600 : 500,
-                      opacity: lit ? 1 : 0.45,
+                    {isActive && (
+                      <circle
+                        cx={node.x}
+                        cy={node.y}
+                        r={r + 10}
+                        fill="none"
+                        stroke="var(--ink-accent)"
+                        strokeWidth={1}
+                        strokeOpacity={0.35}
+                      />
+                    )}
+                    <circle
+                      cx={node.x}
+                      cy={node.y}
+                      r={r}
+                      fill="var(--ink-bg)"
+                      stroke={
+                        isActive ? "var(--ink-accent)" : "var(--ink-muted)"
+                      }
+                      strokeWidth={isActive ? 1.75 : 1.25}
+                    />
+                    <text
+                      x={node.x}
+                      y={labelY}
+                      textAnchor="middle"
+                      fill="var(--ink-muted)"
+                      className="font-sans pointer-events-none"
+                      style={{
+                        fontSize: 8.5,
+                        opacity: lit ? 1 : 0.5,
+                      }}
+                    >
+                      {node.shortLabel}
+                    </text>
+                  </g>
+                );
+              })}
+
+              {topicNodes.map((node, i) => {
+                const r = 12 + (node.weight / maxNode) * 9;
+                const lit = isNodeLit(node.id);
+                const isActive = activeId === node.id;
+                const labelY = node.y + r + 13;
+                return (
+                  <g
+                    key={node.id}
+                    className={`theme-graph-node cursor-pointer outline-none${lit ? "" : " theme-graph-node-dim"}`}
+                    style={{ animationDelay: `${60 + i * 50}ms` }}
+                    onMouseEnter={() => setHoveredId(node.id)}
+                    onMouseLeave={() =>
+                      setHoveredId((h) => (h === node.id ? null : h))
+                    }
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                      selectNode(node.id);
                     }}
+                    onKeyDown={(ev) => {
+                      if (ev.key === "Enter" || ev.key === " ") {
+                        ev.preventDefault();
+                        selectNode(node.id);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={selectedId === node.id}
+                    aria-label={`${node.label}, ${node.weight} ${node.weight === 1 ? "mention" : "mentions"}`}
                   >
-                    {node.shortLabel}
-                  </text>
-                </g>
-              );
-            })}
+                    <circle
+                      cx={node.x}
+                      cy={node.y}
+                      r={r + 16}
+                      fill="transparent"
+                    />
+                    {isActive && (
+                      <circle
+                        cx={node.x}
+                        cy={node.y}
+                        r={r + 12}
+                        fill={node.color}
+                        fillOpacity={0.12}
+                        stroke={node.color}
+                        strokeWidth={1}
+                        strokeOpacity={0.4}
+                      />
+                    )}
+                    <circle
+                      cx={node.x}
+                      cy={node.y}
+                      r={r}
+                      fill={node.color}
+                      fillOpacity={isActive ? 0.28 : 0.18}
+                      stroke={node.color}
+                      strokeWidth={isActive ? 2.25 : 1.75}
+                    />
+                    <text
+                      x={node.x}
+                      y={labelY}
+                      textAnchor="middle"
+                      fill="var(--ink-fg)"
+                      className="font-sans pointer-events-none"
+                      style={{
+                        fontSize: 9,
+                        fontWeight: isActive ? 600 : 500,
+                        opacity: lit ? 1 : 0.45,
+                      }}
+                    >
+                      {node.shortLabel}
+                    </text>
+                  </g>
+                );
+              })}
+            </g>
           </g>
         </svg>
       </div>
@@ -404,13 +600,19 @@ export function ThemeNetworkGraph({ graph }: Props) {
             <p className="text-sm font-medium text-ink-fg">
               {activeNode.label}
               <span className="ml-2 font-normal text-ink-muted">
-                {activeNode.kind === "topic" ? "Theme" : "Moment"}
+                {activeNode.kind === "topic"
+                  ? "Theme"
+                  : activeNode.kind === "moment"
+                    ? "Moment"
+                    : "Phrase"}
               </span>
             </p>
             <p className="text-xs text-ink-muted leading-relaxed">
               {activeNode.kind === "topic"
-                ? `${activeNode.weight} ${activeNode.weight === 1 ? "mention" : "mentions"} across today’s entries`
-                : `${activeNode.weight} ${activeNode.weight === 1 ? "entry" : "entries"} at this nudge`}
+                ? `${activeNode.weight} ${activeNode.weight === 1 ? "mention" : "mentions"} in this span`
+                : activeNode.kind === "moment"
+                  ? `${activeNode.weight} ${activeNode.weight === 1 ? "entry" : "entries"} here`
+                  : `Appears in ${activeNode.weight} ${activeNode.weight === 1 ? "entry" : "entries"}`}
               {connectedEdges.length > 0 && (
                 <>
                   {" "}
@@ -434,7 +636,8 @@ export function ThemeNetworkGraph({ graph }: Props) {
           </div>
         ) : (
           <p className="text-xs text-ink-muted">
-            Hover or tap a node to highlight its connections.
+            Drag the canvas to pan. Scroll to zoom. Tap a node to highlight its
+            links.
           </p>
         )}
       </figcaption>
