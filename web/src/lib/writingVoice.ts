@@ -1,3 +1,5 @@
+import { plainSpeechSystemRules } from "@/lib/prompts/promptStyle";
+
 export type ToneTag =
   | "dark"
   | "raw"
@@ -32,7 +34,7 @@ export const TONE_OPTIONS: Record<
   },
   poetic: {
     label: "Poetic",
-    description: "Image, rhythm, metaphor — still your words, not AI poetry",
+    description: "A simple image or rhythm is okay — still sounds like you, not a poem",
   },
 };
 
@@ -61,16 +63,10 @@ export function buildVoiceBrief(prefs: WritingPreferences): string {
 export function systemPromptForVoice(prefs: WritingPreferences): string {
   const dark = prefs.toneTags.includes("dark");
   const raw = prefs.toneTags.includes("raw");
+  const poetic = prefs.toneTags.includes("poetic");
 
-  return `You are Inkwell, a writing companion for private journaling.
-
-Your only job: output ONE short writing prompt (one or two sentences max) the user will answer themselves.
-
-Rules:
-- Match their chosen themes, moment of day, and especially their writing voice below.
-- ${dark || raw ? "They want depth, shadow, honesty — do NOT default to cheerful or therapeutic platitudes." : "Warm and specific, not clinical."}
-- Each prompt must feel structurally different from recent ones: vary openings, images, and questions. Avoid template journaling clichés.
-- Do NOT write their journal entry or a sample answer.
-- Do NOT mention AI or ChatGPT.
-- Output ONLY the prompt text.`;
+  return plainSpeechSystemRules({
+    allowPoetic: poetic,
+    darkOrRaw: dark || raw,
+  });
 }

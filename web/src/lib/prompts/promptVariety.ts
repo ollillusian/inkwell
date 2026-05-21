@@ -1,41 +1,38 @@
 import type { TopicId } from "@/lib/promptEngine";
 import { TOPICS } from "@/lib/promptEngine";
+import { LITERARY_OR_THERAPY_WORDS } from "@/lib/prompts/promptStyle";
 
-/** Creative angles so consecutive LLM prompts do not collapse into the same shape. */
+/** Everyday angles — concrete, not workshop-y. */
 const PROMPT_LENSES = [
-  "A concrete object nearby or from today — not abstract wellness language.",
-  "A small bodily sensation or tension they might be ignoring.",
-  "Something they have not said out loud yet today.",
-  "A place: where they are, where they wish they were, or where they are afraid to return.",
-  "A person who crossed their mind today, without needing to explain the relationship.",
-  "A decision they are postponing, even a trivial one.",
-  "A sound, smell, or texture from the last few hours.",
-  "The gap between what they performed today and what they actually felt.",
-  "Something they are secretly proud of or ashamed of from today.",
-  "A version of tonight/tomorrow if one honest thing changed.",
-  "A memory that surfaced uninvited and will not leave.",
-  "A rule they live by that cost them something today.",
+  "Something that's been bugging you today — say it straight.",
+  "One person or text or interaction you keep thinking about.",
+  "What you're putting off, even if it's small.",
+  "What actually happened today vs what you told people happened.",
+  "A moment today that was annoying, funny, or weird.",
+  "What you wish you'd said to someone.",
+  "What you're tired of — be specific.",
+  "Something you did today that you're not sure was the right call.",
+  "What you want tonight or tomorrow to feel like, in plain terms.",
+  "A detail from today you don't want to forget.",
+  "What you said yes to when you meant no (or the other way around).",
+  "What's taking up space in your head right now.",
 ];
 
 const OPENING_SHAPES = [
-  "Open with a sharp question.",
-  "Open with an imperative verb (name, admit, describe, confess, list).",
-  "Open by naming a specific image, then ask them to stay inside it.",
-  "Open with a contrast (before/after, inside/outside, said/unsaid).",
-  "Open with a number or limit (three words, sixty seconds, one sentence).",
-  "Open with a hypothetical that stays grounded in today.",
+  "Start with a simple question you'd ask out loud.",
+  "Start casual — like 'Okay so…' or 'Honestly,' then ask.",
+  "One short line. No setup, no preamble.",
+  "Start with 'What's…' or 'Why…' or 'Who…' — keep it normal.",
+  "Start with something specific from today, then ask one thing about it.",
+  "Start with 'Tell me about…' or 'What happened with…' — conversational.",
 ];
 
-const CLICHES_TO_AVOID = [
-  "unpack",
-  "hold space",
-  "what came up",
-  "sit with",
-  "check in with yourself",
-  "honor your feelings",
-  "gentle reminder",
-  "what are you grateful for",
-];
+export type VarietyBundle = {
+  lens: string;
+  openingShape: string;
+  focusTopic: TopicId | null;
+  focusLine: string;
+};
 
 function hashString(s: string): number {
   let h = 0;
@@ -44,13 +41,6 @@ function hashString(s: string): number {
   }
   return Math.abs(h);
 }
-
-export type VarietyBundle = {
-  lens: string;
-  openingShape: string;
-  focusTopic: TopicId | null;
-  focusLine: string;
-};
 
 export function pickVarietyBundle(
   seed: string,
@@ -61,7 +51,7 @@ export function pickVarietyBundle(
   const openingShape = OPENING_SHAPES[(h >> 6) % OPENING_SHAPES.length];
   const active = topics.length > 0 ? topics : (["free"] as TopicId[]);
   const focusTopic = active[(h >> 12) % active.length] ?? "free";
-  const focusLine = `Let this prompt lean toward their theme "${TOPICS[focusTopic].label}" without naming the theme label outright.`;
+  const focusLine = `Tie it loosely to "${TOPICS[focusTopic].label}" — don't quote that label in the prompt.`;
 
   return { lens, openingShape, focusTopic, focusLine };
 }
@@ -73,10 +63,10 @@ export function formatRecentPromptsBlock(recentPrompts: string[]): string {
     .slice(0, 12);
   if (trimmed.length === 0) return "";
 
-  return `Recent prompts they already saw (do NOT repeat, paraphrase, or use the same opening rhythm):
+  return `Recent prompts (don't copy these — different words and shape):
 ${trimmed.map((p, i) => `${i + 1}. "${p}"`).join("\n")}
 
-Banned filler phrases unless their own voice uses them: ${CLICHES_TO_AVOID.join(", ")}.`;
+Avoid therapy/journal-brand words unless the user uses them: ${LITERARY_OR_THERAPY_WORDS.slice(0, 20).join(", ")}, etc.`;
 }
 
 export function shuffleTopicsForPrompt(topics: TopicId[], seed: string): TopicId[] {

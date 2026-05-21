@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { formatLocalNowForLLM } from "@/lib/datetime";
 import { TOPICS, type TopicId } from "@/lib/promptEngine";
 import type { NudgeKind } from "@/lib/nudges";
+import { PLAIN_SPEECH_USER_REMINDER } from "@/lib/prompts/promptStyle";
 import {
   formatRecentPromptsBlock,
   pickVarietyBundle,
@@ -73,10 +74,10 @@ export async function generatePromptWithLLM(
   try {
     const response = await client.chat.completions.create({
       model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
-      temperature: highVariety ? 1 : 0.88,
-      top_p: highVariety ? 0.92 : 0.9,
-      frequency_penalty: highVariety ? 0.55 : 0.25,
-      presence_penalty: highVariety ? 0.4 : 0.15,
+      temperature: highVariety ? 0.92 : 0.78,
+      top_p: highVariety ? 0.9 : 0.85,
+      frequency_penalty: highVariety ? 0.5 : 0.35,
+      presence_penalty: highVariety ? 0.35 : 0.2,
       max_tokens: 120,
       messages: [
         { role: "system", content: systemPromptForVoice(context.voice) },
@@ -91,15 +92,17 @@ ${themes}
 
 ${voiceBrief || "No specific voice set — keep prompts honest and inviting."}
 
-Variety directive (follow closely):
-- Creative lens: ${variety.lens}
+Angle for this one:
+- ${variety.lens}
 - ${variety.openingShape}
 - ${variety.focusLine}
 ${recentBlock ? `\n${recentBlock}` : ""}
 
-Write one prompt in their voice. It must feel distinct from the recent prompts above.${
+${PLAIN_SPEECH_USER_REMINDER}
+
+Write one nudge in their voice. Different from the recent ones.${
             highVariety
-              ? " Vary sentence length and rhythm; avoid starting with What, How, or Take a moment."
+              ? " Keep it casual; don't start with What, How, Take a moment, or If your body could."
               : ""
           }`,
         },
