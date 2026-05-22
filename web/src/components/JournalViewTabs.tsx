@@ -1,9 +1,10 @@
 import Link from "next/link";
 
-export type JournalView = "days" | "weeks" | "months";
+export type JournalView = "days" | "weeks" | "months" | "timeline";
 
 const TABS: { id: JournalView; label: string }[] = [
   { id: "days", label: "Days" },
+  { id: "timeline", label: "Timeline" },
   { id: "weeks", label: "Weeks" },
   { id: "months", label: "Months" },
 ];
@@ -18,7 +19,11 @@ export function JournalViewTabs({ active }: { active: JournalView }) {
       {TABS.map((tab) => (
         <Link
           key={tab.id}
-          href={tab.id === "days" ? "/app/journal" : `/app/journal?view=${tab.id}`}
+          href={
+            tab.id === "days"
+              ? "/app/journal"
+              : `/app/journal?view=${tab.id}`
+          }
           role="tab"
           aria-selected={active === tab.id}
           className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${

@@ -19,6 +19,11 @@ import {
   JournalViewTabs,
   type JournalView,
 } from "@/components/JournalViewTabs";
+import { ThemeTimelineSlider } from "@/components/ThemeTimelineSlider";
+import { legacyScheduleFromProfile } from "@/lib/nudges";
+import { formatOnDemandPromptLabel } from "@/lib/prompts/onDemandPrompt";
+import type { TopicId } from "@/lib/promptEngine";
+import { buildThemeTimeline } from "@/lib/themeTimeline";
 import type { Entry } from "@/types/database";
 
 export const dynamic = "force-dynamic";
@@ -28,8 +33,15 @@ type Props = {
 };
 
 function parseView(raw?: string): JournalView {
-  if (raw === "weeks" || raw === "months") return raw;
+  if (raw === "weeks" || raw === "months" || raw === "timeline") return raw;
   return "days";
+}
+
+function slotLabel(
+  slot: string,
+  labelById: Record<string, string>
+): string {
+  return labelById[slot] ?? formatOnDemandPromptLabel(slot) ?? slot;
 }
 
 export default async function JournalPage({ searchParams }: Props) {
@@ -52,11 +64,17 @@ export default async function JournalPage({ searchParams }: Props) {
   const list = publishedEntries((entries ?? []) as Entry[]);
   const { data: profile } = await supabase
     .from("profiles")
-    .select("timezone")
+    .select("*")
     .eq("id", user.id)
     .single();
 
   const timeZone = profile?.timezone || "UTC";
+  const schedule = legacyScheduleFromProfile(profile ?? {});
+  const labelById = Object.fromEntries(
+    schedule.nudges.map((n) => [n.id, n.label])
+  );
+  const resolveLabel = (slot: string) => slotLabel(slot, labelById);
+  const profileTopics = (profile?.topics ?? []) as TopicId[];
 
   if (list.length === 0) {
     return (
@@ -79,12 +97,19 @@ export default async function JournalPage({ searchParams }: Props) {
   const weeks = groupEntriesByLocalWeek(list, timeZone);
   const months = groupEntriesByLocalMonth(list, timeZone);
 
+  const timelineSteps =
+    view === "timeline"
+      ? buildThemeTimeline(list, timeZone, resolveLabel, profileTopics)
+      : [];
+
   const blurb =
-    view === "weeks"
-      ? "Open a week for a theme map, woven story, and entries grouped by day."
-      : view === "months"
-        ? "Open a month for a longer story and how themes moved across the month."
-        : "Open a day for your theme map, a woven short story, and full entries.";
+    view === "timeline"
+      ? "Drag the slider to watch how each day’s theme network grows and shifts (last 45 days with entries)."
+      : view === "weeks"
+        ? "Open a week for a theme map, woven story, and entries grouped by day."
+        : view === "months"
+          ? "Open a month for a longer story and how themes moved across the month."
+          : "Open a day for your theme map, a woven short story, and full entries.";
 
   return (
     <div className="space-y-6 pb-8">
@@ -93,6 +118,8 @@ export default async function JournalPage({ searchParams }: Props) {
         <JournalViewTabs active={view} />
         <p className="text-sm text-ink-muted">{blurb}</p>
       </div>
+
+      {view === "timeline" && <ThemeTimelineSlider steps={timelineSteps} />}
 
       {view === "days" && (
         <ul className="space-y-4">
