@@ -104,7 +104,7 @@ export default async function JournalPage({ searchParams }: Props) {
 
   const blurb =
     view === "timeline"
-      ? "Drag the slider to watch how each day’s theme network grows and shifts (last 45 days with entries)."
+      ? "Scrub days to see how your theme map grows (last 45 days with entries)."
       : view === "weeks"
         ? "Open a week for a theme map, woven story, and entries grouped by day."
         : view === "months"
@@ -112,14 +112,18 @@ export default async function JournalPage({ searchParams }: Props) {
           : "Open a day for your theme map, a woven short story, and full entries.";
 
   return (
-    <div className="space-y-6 pb-8">
-      <div className="space-y-4">
+    <div className="space-y-6 pb-8 w-full min-w-0 max-w-full">
+      <div className="space-y-4 min-w-0">
         <h1 className="font-serif text-3xl">Journal</h1>
         <JournalViewTabs active={view} />
-        <p className="text-sm text-ink-muted">{blurb}</p>
+        <p className="text-sm text-ink-muted leading-relaxed">{blurb}</p>
       </div>
 
-      {view === "timeline" && <ThemeTimelineSlider steps={timelineSteps} />}
+      {view === "timeline" && (
+        <div className="w-full min-w-0">
+          <ThemeTimelineSlider steps={timelineSteps} />
+        </div>
+      )}
 
       {view === "days" && (
         <ul className="space-y-4">

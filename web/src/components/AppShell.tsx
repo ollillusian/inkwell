@@ -10,9 +10,17 @@ const nav = [
   { href: "/app/settings", label: "Settings" },
 ];
 
+function mainMaxWidth(pathname: string): string {
+  if (pathname.startsWith("/app/journal")) {
+    return "max-w-2xl";
+  }
+  return "max-w-lg";
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const mainWidth = mainMaxWidth(pathname);
 
   async function signOut() {
     const supabase = createClient();
@@ -24,7 +32,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-full flex flex-col bg-ink-bg text-ink-fg">
       <header className="sticky top-0 z-10 border-b border-ink-border/50 bg-ink-bg/90 backdrop-blur-md">
-        <div className="mx-auto flex max-w-lg items-center justify-between px-5 py-4">
+        <div
+          className={`mx-auto flex w-full min-w-0 ${mainWidth} items-center justify-between px-4 sm:px-5 py-4`}
+        >
           <Link href="/app" className="font-serif text-xl tracking-tight">
             Inkwell
           </Link>
@@ -36,7 +46,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             Sign out
           </button>
         </div>
-        <nav className="mx-auto flex max-w-lg gap-1 px-5 pb-3">
+        <nav
+          className={`mx-auto flex w-full min-w-0 ${mainWidth} gap-1 px-4 sm:px-5 pb-3`}
+        >
           {nav.map((item) => {
             const active =
               item.href === "/app"
@@ -59,7 +71,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
       </header>
-      <main className="flex-1 mx-auto w-full max-w-lg px-5 py-8">{children}</main>
+      <main
+        className={`flex-1 mx-auto w-full min-w-0 ${mainWidth} px-4 sm:px-5 py-8`}
+      >
+        {children}
+      </main>
     </div>
   );
 }

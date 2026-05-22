@@ -21,6 +21,8 @@ type Props = {
   emphasisIds?: string[];
   /** Extra ring on these nodes (new since prior day). */
   pulseIds?: string[];
+  /** Tighter chrome for timeline / narrow layouts. */
+  compact?: boolean;
 };
 
 /** Subtle curve so edges don't stack on identical paths. */
@@ -94,6 +96,7 @@ export function ThemeNetworkGraph({
   graph,
   emphasisIds,
   pulseIds,
+  compact = false,
 }: Props) {
   const uid = useId().replace(/:/g, "");
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -260,15 +263,30 @@ export function ThemeNetworkGraph({
   const signalNodes = nodes.filter((n) => n.kind === "signal");
 
   return (
-    <figure className="overflow-hidden rounded-2xl border border-ink-border bg-ink-surface/90">
-      <div className="px-4 pt-4 pb-2 flex flex-wrap items-start justify-between gap-3">
-        <p className="text-xs text-ink-muted leading-relaxed max-w-md">
-          Themes use your entry text plus onboarding labels. Phrases appear when
-          the same wording shows up in multiple entries. Drag the background to
-          pan; scroll to zoom; use the arrows to rotate.
-        </p>
-        <div className="flex flex-wrap gap-2 items-center justify-end shrink-0">
-          <div className="flex gap-1">
+    <figure className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-ink-border bg-ink-surface/90">
+      <div
+        className={`px-3 sm:px-4 pt-3 sm:pt-4 pb-2 flex gap-2 ${
+          compact
+            ? "flex-col"
+            : "flex-wrap items-start justify-between gap-3"
+        }`}
+      >
+        {!compact && (
+          <p className="text-xs text-ink-muted leading-relaxed max-w-md min-w-0">
+            Themes use your entry text plus onboarding labels. Phrases appear when
+            the same wording shows up in multiple entries. Drag the background to
+            pan; scroll to zoom; use the arrows to rotate.
+          </p>
+        )}
+        <div
+          className={`flex flex-wrap gap-2 items-center ${
+            compact ? "w-full justify-between" : "justify-end shrink-0"
+          }`}
+        >
+          {compact && (
+            <p className="text-[10px] text-ink-muted">Pan · scroll zoom · rotate</p>
+          )}
+          <div className="flex gap-1 shrink-0">
             <button
               type="button"
               aria-label="Zoom out"
@@ -311,16 +329,16 @@ export function ThemeNetworkGraph({
               Reset
             </button>
           </div>
-          <div className="flex flex-wrap gap-3 text-[10px] text-ink-muted">
-            <span className="flex items-center gap-1.5">
+          <div className="flex flex-wrap gap-2 sm:gap-3 text-[10px] text-ink-muted shrink-0">
+            <span className="flex items-center gap-1">
               <span className="w-2.5 h-2.5 rounded-full border-2 border-ink-accent bg-ink-accent/25" />
               Theme
             </span>
-            <span className="flex items-center gap-1.5">
+            <span className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-full border border-ink-muted bg-ink-bg" />
               Moment
             </span>
-            <span className="flex items-center gap-1.5">
+            <span className="flex items-center gap-1">
               <span className="w-2 h-2 rounded-sm border border-dashed border-ink-fg/35 bg-ink-bg" />
               Phrase
             </span>
@@ -329,13 +347,13 @@ export function ThemeNetworkGraph({
       </div>
 
       <div
-        className="relative touch-pan-y cursor-grab active:cursor-grabbing"
+        className="relative w-full max-w-full min-w-0 touch-pan-y cursor-grab active:cursor-grabbing"
         onMouseLeave={() => setHoveredId(null)}
       >
         <svg
           ref={svgRef}
           viewBox={`0 0 ${width} ${height}`}
-          className="w-full h-auto block theme-graph-svg select-none touch-manipulation [touch-action:none]"
+          className="w-full max-w-full h-auto block theme-graph-svg select-none touch-manipulation [touch-action:none]"
           role="img"
           aria-label="Interactive map of journal themes and phrases"
           onWheel={onWheel}
@@ -653,7 +671,7 @@ export function ThemeNetworkGraph({
         </svg>
       </div>
 
-      <figcaption className="border-t border-ink-border/80 px-4 py-3 min-h-[3.25rem]">
+      <figcaption className="border-t border-ink-border/80 px-3 sm:px-4 py-3 min-h-[3.25rem]">
         {activeNode ? (
           <div className="space-y-1.5">
             <p className="text-sm font-medium text-ink-fg">

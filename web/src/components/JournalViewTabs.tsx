@@ -11,30 +11,32 @@ const TABS: { id: JournalView; label: string }[] = [
 
 export function JournalViewTabs({ active }: { active: JournalView }) {
   return (
-    <div
-      className="inline-flex rounded-full border border-ink-border bg-ink-surface/80 p-1"
-      role="tablist"
-      aria-label="Journal views"
-    >
-      {TABS.map((tab) => (
-        <Link
-          key={tab.id}
-          href={
-            tab.id === "days"
-              ? "/app/journal"
-              : `/app/journal?view=${tab.id}`
-          }
-          role="tab"
-          aria-selected={active === tab.id}
-          className={`rounded-full px-4 py-2 text-sm font-medium transition-colors ${
-            active === tab.id
-              ? "bg-ink-fg text-ink-bg"
-              : "text-ink-muted hover:text-ink-fg"
-          }`}
-        >
-          {tab.label}
-        </Link>
-      ))}
+    <div className="w-full min-w-0 -mx-1 px-1 overflow-x-auto overscroll-x-contain">
+      <div
+        className="inline-flex min-w-full sm:min-w-0 rounded-full border border-ink-border bg-ink-surface/80 p-1"
+        role="tablist"
+        aria-label="Journal views"
+      >
+        {TABS.map((tab) => (
+          <Link
+            key={tab.id}
+            href={
+              tab.id === "days"
+                ? "/app/journal"
+                : `/app/journal?view=${tab.id}`
+            }
+            role="tab"
+            aria-selected={active === tab.id}
+            className={`shrink-0 rounded-full px-3.5 sm:px-4 py-2 text-sm font-medium transition-colors whitespace-nowrap ${
+              active === tab.id
+                ? "bg-ink-fg text-ink-bg"
+                : "text-ink-muted hover:text-ink-fg"
+            }`}
+          >
+            {tab.label}
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }
