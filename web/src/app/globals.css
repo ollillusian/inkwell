@@ -59,3 +59,46 @@ body {
   stroke: var(--ink-accent);
   stroke-width: 2.5;
 }
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-graph-pulse {
+    animation: inkwell-pulse-ring 2s ease-out infinite;
+  }
+  .timeline-day-enter {
+    animation: timeline-day-enter 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+}
+
+@keyframes inkwell-pulse-ring {
+  0% {
+    stroke-opacity: 0.75;
+    transform: scale(0.92);
+  }
+  70% {
+    stroke-opacity: 0.15;
+    transform: scale(1.08);
+  }
+  100% {
+    stroke-opacity: 0;
+    transform: scale(1.12);
+  }
+}
+
+@keyframes timeline-day-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.timeline-filmstrip::-webkit-scrollbar {
+  height: 4px;
+}
+.timeline-filmstrip::-webkit-scrollbar-thumb {
+  background: var(--ink-border);
+  border-radius: 999px;
+}

@@ -17,6 +17,10 @@ import type {
 
 type Props = {
   graph: DayThemeGraph;
+  /** When set, dims unrelated nodes (e.g. timeline “what’s new”). */
+  emphasisIds?: string[];
+  /** Extra ring on these nodes (new since prior day). */
+  pulseIds?: string[];
 };
 
 /** Subtle curve so edges don't stack on identical paths. */
@@ -86,7 +90,11 @@ function clientToSvg(svg: SVGSVGElement, clientX: number, clientY: number) {
   return pt.matrixTransform(m.inverse());
 }
 
-export function ThemeNetworkGraph({ graph }: Props) {
+export function ThemeNetworkGraph({
+  graph,
+  emphasisIds,
+  pulseIds,
+}: Props) {
   const uid = useId().replace(/:/g, "");
   const svgRef = useRef<SVGSVGElement | null>(null);
   const { nodes, edges, width, height, centerX, centerY } = graph;
@@ -125,12 +133,25 @@ export function ThemeNetworkGraph({ graph }: Props) {
 
   const neighbors = useMemo(() => buildAdjacency(edges), [edges]);
 
+  const emphasisSet = useMemo(
+    () => new Set(emphasisIds ?? []),
+    [emphasisIds]
+  );
+  const pulseSet = useMemo(() => new Set(pulseIds ?? []), [pulseIds]);
+
   const highlightIds = useMemo(() => {
-    if (!activeId) return null;
-    const set = new Set<string>([activeId]);
-    for (const id of neighbors.get(activeId) ?? []) set.add(id);
+    if (activeId) {
+      const set = new Set<string>([activeId]);
+      for (const id of neighbors.get(activeId) ?? []) set.add(id);
+      return set;
+    }
+    if (emphasisSet.size === 0) return null;
+    const set = new Set<string>(emphasisSet);
+    for (const id of emphasisSet) {
+      for (const n of neighbors.get(id) ?? []) set.add(n);
+    }
     return set;
-  }, [activeId, neighbors]);
+  }, [activeId, emphasisSet, neighbors]);
 
   const isEdgeLit = useCallback(
     (edge: ThemeGraphEdge) => {
@@ -383,6 +404,7 @@ export function ThemeNetworkGraph({ graph }: Props) {
                 const s = 4 + (node.weight / maxNode) * 3;
                 const lit = isNodeLit(node.id);
                 const isActive = activeId === node.id;
+                const isPulse = pulseSet.has(node.id);
                 const labelY = node.y + s + 12;
                 return (
                   <g
@@ -415,6 +437,19 @@ export function ThemeNetworkGraph({ graph }: Props) {
                       height={(s + 12) * 2}
                       fill="transparent"
                     />
+                    {isPulse && (
+                      <rect
+                        x={node.x - s - 4}
+                        y={node.y - s - 4}
+                        width={(s + 4) * 2}
+                        height={(s + 4) * 2}
+                        rx={3}
+                        fill="none"
+                        stroke="var(--ink-accent)"
+                        strokeWidth={1}
+                        className="theme-graph-pulse"
+                      />
+                    )}
                     <rect
                       x={node.x - s}
                       y={node.y - s}
@@ -447,6 +482,7 @@ export function ThemeNetworkGraph({ graph }: Props) {
                 const r = 5 + (node.weight / maxNode) * 3;
                 const lit = isNodeLit(node.id);
                 const isActive = activeId === node.id;
+                const isPulse = pulseSet.has(node.id);
                 const labelY = node.y + r + 11;
                 return (
                   <g
@@ -478,6 +514,17 @@ export function ThemeNetworkGraph({ graph }: Props) {
                       r={r + 14}
                       fill="transparent"
                     />
+                    {isPulse && (
+                      <circle
+                        cx={node.x}
+                        cy={node.y}
+                        r={r + 8}
+                        fill="none"
+                        stroke="var(--ink-accent)"
+                        strokeWidth={1}
+                        className="theme-graph-pulse"
+                      />
+                    )}
                     {isActive && (
                       <circle
                         cx={node.x}
@@ -520,6 +567,7 @@ export function ThemeNetworkGraph({ graph }: Props) {
                 const r = 12 + (node.weight / maxNode) * 9;
                 const lit = isNodeLit(node.id);
                 const isActive = activeId === node.id;
+                const isPulse = pulseSet.has(node.id);
                 const labelY = node.y + r + 13;
                 return (
                   <g
@@ -551,6 +599,17 @@ export function ThemeNetworkGraph({ graph }: Props) {
                       r={r + 16}
                       fill="transparent"
                     />
+                    {isPulse && (
+                      <circle
+                        cx={node.x}
+                        cy={node.y}
+                        r={r + 10}
+                        fill="none"
+                        stroke="var(--ink-accent)"
+                        strokeWidth={1.25}
+                        className="theme-graph-pulse"
+                      />
+                    )}
                     {isActive && (
                       <circle
                         cx={node.x}
