@@ -7,6 +7,8 @@
   --ink-border: #ddd6cb;
   --ink-surface: #fffcf7;
   --ink-accent: #9a7b5c;
+  /* Matches AppShell CONTENT_MAX (max-w-2xl = 42rem) */
+  --ink-content-max: 42rem;
 }
 
 @theme inline {
@@ -93,6 +95,14 @@ body {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.app-content-column {
+  width: 100%;
+  max-width: var(--ink-content-max);
+  min-width: 0;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .timeline-root {
