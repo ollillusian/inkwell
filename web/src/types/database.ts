@@ -29,7 +29,7 @@ export type Entry = {
   written_at: string;
   created_at?: string;
   updated_at?: string;
-  is_draft: boolean;
+  is_draft: boolean | null;
 };
 
 export type DayStory = {

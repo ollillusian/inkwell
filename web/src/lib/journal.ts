@@ -7,11 +7,15 @@ export function wordCount(text: string): number {
   return trimmed.split(/\s+/).length;
 }
 
-/** True when the user tapped Save to journal (explicit publish, not autosave draft). */
+/**
+ * True when the entry should appear in the journal.
+ * An entry is published unless it's explicitly a draft (`is_draft === true`).
+ * This handles null/undefined values from legacy rows or migration gaps.
+ */
 export function isPublishedEntry(
   entry: Pick<Entry, "is_draft" | "body">
 ): boolean {
-  return entry.is_draft === false && Boolean(entry.body?.trim());
+  return entry.is_draft !== true && Boolean(entry.body?.trim());
 }
 
 /** Saved journal entries (excludes in-progress autosave drafts and empty bodies). */
