@@ -26,14 +26,11 @@ class DraftSchemaUnavailableError extends Error {
   }
 }
 
+/** Only match PostgreSQL "undefined_column" — the column genuinely doesn't exist. */
 function isMissingDraftColumnError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const maybeError = error as { code?: string; message?: string };
-  return (
-    maybeError.code === "PGRST204" ||
-    maybeError.code === "42703" ||
-    Boolean(maybeError.message?.includes("is_draft"))
-  );
+  return maybeError.code === "42703";
 }
 
 export function WriteEditor({
@@ -103,7 +100,11 @@ export function WriteEditor({
           throw new DraftSchemaUnavailableError();
         }
 
-        if (isMissingDraftColumnError(error)) {
+        if (isMissingDraftColumnError(error) && !isDraft) {
+          // Column doesn't exist (pre-migration). Insert without is_draft;
+          // the DB default is false, so new rows are treated as published.
+          // For updates the column simply isn't there, so the row is already
+          // in whatever state the DB default left it (false).
           const fallback = existingEntryId
             ? await supabase
                 .from("entries")
