@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { formatMonthLabel, formatWrittenAt } from "@/lib/datetime";
-import { wordCount } from "@/lib/journal";
+import { entryLocalDateKey, wordCount } from "@/lib/journal";
 import { entriesToThemeGraphInput } from "@/lib/journalGraph";
 import {
   dayGroupsInMonth,
@@ -12,7 +12,7 @@ import {
 import { legacyScheduleFromProfile } from "@/lib/nudges";
 import { formatOnDemandPromptLabel } from "@/lib/prompts/onDemandPrompt";
 import type { TopicId } from "@/lib/promptEngine";
-import { buildDayThemeGraph } from "@/lib/themeGraph";
+import { buildDayThemeGraph, topicWeightsFromEntries } from "@/lib/themeGraph";
 import { sanitizeStoryProse } from "@/lib/storyFormat";
 import { ThemeNetworkGraph } from "@/components/ThemeNetworkGraph";
 import { PeriodStoryPanel } from "@/components/PeriodStoryPanel";
@@ -73,10 +73,19 @@ export default async function JournalMonthPage({ params }: Props) {
     );
   }
 
+  const priorEntries = all.filter(
+    (e) =>
+      entryLocalDateKey(e.written_at, timeZone) < `${monthKey}-01`
+  );
+  const priorTopicWeights =
+    priorEntries.length > 0
+      ? topicWeightsFromEntries(priorEntries, (profile?.topics ?? []) as string[])
+      : undefined;
+
   const themeGraph = buildDayThemeGraph(
     entriesToThemeGraphInput(monthEntries, timeZone, resolveLabel),
     (profile?.topics ?? []) as TopicId[],
-    { momentByDay: true }
+    { momentByDay: true, priorTopicWeights }
   );
 
   const { data: periodStory } = await supabase

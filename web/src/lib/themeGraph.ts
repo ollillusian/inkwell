@@ -25,6 +25,28 @@ export type ThemeGraphEdge = {
   kind: "cooccur" | "flow" | "moment" | "phrase";
 };
 
+/** A snippet of entry text associated with a topic or phrase. */
+export type GraphExcerpt = {
+  entryId: string;
+  momentLabel: string;
+  text: string;
+};
+
+/** How a topic is trending compared to the prior period. */
+export type TopicTrend = "new" | "growing" | "steady" | "fading";
+
+/** Rich context the graph can surface when a node or edge is tapped. */
+export type GraphContext = {
+  /** Entry excerpts per node id (topics and phrases). */
+  excerpts: Record<string, GraphExcerpt[]>;
+  /** Trend per topic id (only topics). */
+  trends: Record<string, TopicTrend>;
+  /** For each topic, the strongest co-occurring topic id + shared count. */
+  strongestBond: Record<string, { peerId: string; peerLabel: string; count: number }>;
+  /** Human-readable explanation per edge key ("source|target"). */
+  edgeExplanations: Record<string, string>;
+};
+
 export type DayThemeGraph = {
   nodes: ThemeGraphNode[];
   edges: ThemeGraphEdge[];
@@ -32,7 +54,33 @@ export type DayThemeGraph = {
   height: number;
   centerX: number;
   centerY: number;
+  context?: GraphContext;
 };
+
+/**
+ * Compute a topic-weight map from entries (for use as `priorTopicWeights`).
+ * Counts how many entries each topic appears in.
+ */
+export function topicWeightsFromEntries(
+  entries: { topics_snapshot: string[]; body: string }[],
+  profileTopics: string[] = []
+): Record<string, number> {
+  const profile = profileTopics.filter((t): t is TopicId => isValidTopicId(t));
+  const corpus: EntryForAnalysis[] = entries.map((e, i) => ({
+    id: `prior-${i}`,
+    topics_snapshot: e.topics_snapshot,
+    body: e.body ?? "",
+  }));
+  const { tokenSets, df, nDocs } = prepareCorpusForAnalysis(corpus);
+  const weights: Record<string, number> = {};
+  for (let i = 0; i < corpus.length; i++) {
+    const topics = analyzedTopicsForEntry(corpus[i]!, profile, tokenSets, df, nDocs);
+    for (const t of topics) {
+      weights[t] = (weights[t] ?? 0) + 1;
+    }
+  }
+  return weights;
+}
 
 const GRAPH_WIDTH = 720;
 const GRAPH_HEIGHT = 540;
@@ -53,6 +101,14 @@ export const TOPIC_COLORS: Record<TopicId, string> = {
 const MOMENT_COLOR = "#6b6560";
 const SIGNAL_COLOR = "#5c5348";
 
+function idHash(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
 type DayEntryInput = {
   id: string;
   topics_snapshot: string[];
@@ -68,6 +124,8 @@ export type ThemeGraphOptions = {
   momentByDay?: boolean;
   /** Deterministic seed for force layout. */
   layoutSeed?: number;
+  /** Topic weights from the prior period — used to compute trend (new/growing/steady/fading). */
+  priorTopicWeights?: Record<string, number>;
 };
 
 function topicLabel(id: TopicId): string {
@@ -269,6 +327,16 @@ export function buildDayThemeGraph(
     layoutSeed
   );
 
+  const context = buildGraphContext(
+    entries,
+    corpusEntries,
+    chronology,
+    entryToMoment,
+    edgeMap,
+    nodes,
+    options
+  );
+
   return {
     nodes,
     edges,
@@ -276,5 +344,149 @@ export function buildDayThemeGraph(
     height: GRAPH_HEIGHT,
     centerX: cx,
     centerY: cy,
+    context,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Context builder — excerpts, bonds, edge explanations
+// ---------------------------------------------------------------------------
+
+function extractExcerpt(body: string, maxLen = 120): string {
+  const clean = body.replace(/\s+/g, " ").trim();
+  if (clean.length <= maxLen) return clean;
+  const cut = clean.slice(0, maxLen);
+  const sp = cut.lastIndexOf(" ");
+  return `${(sp > 40 ? cut.slice(0, sp) : cut).trim()}…`;
+}
+
+function buildGraphContext(
+  entries: DayEntryInput[],
+  corpus: EntryForAnalysis[],
+  chronology: TopicId[][],
+  entryToMoment: Map<string, string>,
+  edgeMap: Map<string, { weight: number; kind: ThemeGraphEdge["kind"] }>,
+  nodes: ThemeGraphNode[],
+  options: ThemeGraphOptions
+): GraphContext {
+  const excerpts: Record<string, GraphExcerpt[]> = {};
+  const topicCooccur = new Map<string, Map<string, number>>();
+
+  for (let idx = 0; idx < entries.length; idx++) {
+    const entry = entries[idx]!;
+    const topics = chronology[idx]!;
+    const momentId = entryToMoment.get(entry.id) ?? "";
+    const momentNode = nodes.find((n) => n.id === momentId);
+    const momentLabel = momentNode?.label ?? entry.nudgeLabel;
+    const snippet = extractExcerpt(entry.body);
+    if (!snippet) continue;
+
+    for (const tid of topics) {
+      if (!excerpts[tid]) excerpts[tid] = [];
+      if (excerpts[tid].length < 3) {
+        excerpts[tid].push({ entryId: entry.id, momentLabel, text: snippet });
+      }
+    }
+
+    for (let i = 0; i < topics.length; i++) {
+      for (let j = i + 1; j < topics.length; j++) {
+        const a = topics[i]!;
+        const b = topics[j]!;
+        if (!topicCooccur.has(a)) topicCooccur.set(a, new Map());
+        if (!topicCooccur.has(b)) topicCooccur.set(b, new Map());
+        topicCooccur.get(a)!.set(b, (topicCooccur.get(a)!.get(b) ?? 0) + 1);
+        topicCooccur.get(b)!.set(a, (topicCooccur.get(b)!.get(a) ?? 0) + 1);
+      }
+    }
+  }
+
+  // Phrase excerpts — find entries containing the bigram
+  for (const node of nodes) {
+    if (node.kind !== "signal") continue;
+    const words = node.label.split(" ");
+    if (words.length < 2) continue;
+    const a = words[0]!.toLowerCase();
+    const b = words[1]!.toLowerCase();
+    excerpts[node.id] = [];
+    for (const entry of entries) {
+      const lower = entry.body.toLowerCase();
+      if (lower.includes(`${a} ${b}`) || lower.includes(`${a}  ${b}`)) {
+        const momentId = entryToMoment.get(entry.id) ?? "";
+        const momentNode = nodes.find((n) => n.id === momentId);
+        excerpts[node.id].push({
+          entryId: entry.id,
+          momentLabel: momentNode?.label ?? entry.nudgeLabel,
+          text: extractExcerpt(entry.body),
+        });
+        if (excerpts[node.id].length >= 3) break;
+      }
+    }
+  }
+
+  const strongestBond: GraphContext["strongestBond"] = {};
+  for (const [tid, peers] of topicCooccur) {
+    let best: { peerId: string; count: number } | null = null;
+    for (const [pid, cnt] of peers) {
+      if (!best || cnt > best.count) best = { peerId: pid, count: cnt };
+    }
+    if (best) {
+      const peerNode = nodes.find((n) => n.id === best!.peerId);
+      strongestBond[tid] = {
+        peerId: best.peerId,
+        peerLabel: peerNode?.label ?? best.peerId,
+        count: best.count,
+      };
+    }
+  }
+
+  const edgeExplanations: Record<string, string> = {};
+  const nodeById = new Map(nodes.map((n) => [n.id, n]));
+  for (const [key, { weight, kind }] of edgeMap) {
+    const [srcId, tgtId] = key.split("|");
+    const src = nodeById.get(srcId!);
+    const tgt = nodeById.get(tgtId!);
+    if (!src || !tgt) continue;
+
+    let text: string;
+    switch (kind) {
+      case "cooccur":
+        text = `${src.label} and ${tgt.label} appeared in the same ${weight === 1 ? "entry" : `${Math.ceil(weight / 2)} entries`}`;
+        break;
+      case "flow":
+        text = `${src.label} flowed into ${tgt.label} across consecutive entries`;
+        break;
+      case "moment":
+        text = src.kind === "topic"
+          ? `${src.label} came up during ${tgt.label}`
+          : `${tgt.label} came up during ${src.label}`;
+        break;
+      case "phrase":
+        text = `The phrase "${src.kind === "signal" ? src.label : tgt.label}" appeared in entries linked to ${src.kind === "signal" ? tgt.label : src.label}`;
+        break;
+      default:
+        text = `${src.label} connects to ${tgt.label} (${weight}×)`;
+    }
+    edgeExplanations[key] = text;
+  }
+
+  const trends: Record<string, TopicTrend> = {};
+  if (options.priorTopicWeights) {
+    const prior = options.priorTopicWeights;
+    for (const node of nodes) {
+      if (node.kind !== "topic") continue;
+      const current = node.weight;
+      const prev = prior[node.id] ?? 0;
+      if (prev === 0) {
+        trends[node.id] = "new";
+      } else if (current > prev * 1.25) {
+        trends[node.id] = "growing";
+      } else if (current < prev * 0.6) {
+        trends[node.id] = "fading";
+      } else {
+        trends[node.id] = "steady";
+      }
+    }
+  }
+
+  return { excerpts, trends, strongestBond, edgeExplanations };
 }

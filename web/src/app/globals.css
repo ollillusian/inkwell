@@ -97,6 +97,14 @@ body {
   }
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  .theme-graph-edge {
+    transition: stroke-opacity 300ms ease,
+                stroke-width 200ms ease,
+                stroke 200ms ease;
+  }
+}
+
 .app-content-column {
   width: 100%;
   max-width: var(--ink-content-max);

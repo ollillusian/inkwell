@@ -4,6 +4,7 @@ import { entriesToThemeGraphInput } from "@/lib/journalGraph";
 import type { TopicId } from "@/lib/promptEngine";
 import {
   buildDayThemeGraph,
+  topicWeightsFromEntries,
   type DayThemeGraph,
   type ThemeGraphNode,
 } from "@/lib/themeGraph";
@@ -163,14 +164,24 @@ export function buildThemeTimeline(
 
   const steps: ThemeTimelineStep[] = [];
   let prevGraph: DayThemeGraph | null = null;
+  let cumulativePriorEntries: Entry[] = [];
 
   for (const { dateKey, entries: dayEntries } of days) {
     const [y, mo, d] = dateKey.split("-").map(Number);
     const dayDate = zonedLocalToUtc(y, mo, d, 12, 0, timeZone);
+
+    const priorTopicWeights =
+      cumulativePriorEntries.length > 0
+        ? topicWeightsFromEntries(cumulativePriorEntries, profileTopics as string[])
+        : undefined;
+
     const graph = buildDayThemeGraph(
       entriesToThemeGraphInput(dayEntries, timeZone, resolveLabel),
       profileTopics,
-      { layoutSeed: dateKey.split("").reduce((a, c) => a + c.charCodeAt(0), 0) }
+      {
+        layoutSeed: 42,
+        priorTopicWeights,
+      }
     );
 
     const change: ThemeTimelineChange | null = prevGraph
@@ -216,6 +227,7 @@ export function buildThemeTimeline(
     });
 
     prevGraph = graph;
+    cumulativePriorEntries = [...cumulativePriorEntries, ...dayEntries];
   }
 
   return steps;

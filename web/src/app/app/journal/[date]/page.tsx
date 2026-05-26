@@ -16,7 +16,7 @@ import { legacyScheduleFromProfile } from "@/lib/nudges";
 import { formatOnDemandPromptLabel } from "@/lib/prompts/onDemandPrompt";
 import type { TopicId } from "@/lib/promptEngine";
 import { entriesToThemeGraphInput } from "@/lib/journalGraph";
-import { buildDayThemeGraph } from "@/lib/themeGraph";
+import { buildDayThemeGraph, topicWeightsFromEntries } from "@/lib/themeGraph";
 import { sanitizeStoryProse } from "@/lib/storyFormat";
 import { ThemeNetworkGraph } from "@/components/ThemeNetworkGraph";
 import { PeriodStoryPanel } from "@/components/PeriodStoryPanel";
@@ -88,9 +88,19 @@ export default async function JournalDayPage({ params }: Props) {
 
   const [y, mo, d] = dateKey.split("-").map(Number);
   const dayDate = zonedLocalToUtc(y, mo, d, 12, 0, timeZone);
+
+  const priorEntries = all.filter(
+    (e) => entryLocalDateKey(e.written_at, timeZone) < dateKey
+  );
+  const priorTopicWeights =
+    priorEntries.length > 0
+      ? topicWeightsFromEntries(priorEntries, (profile?.topics ?? []) as string[])
+      : undefined;
+
   const themeGraph = buildDayThemeGraph(
     entriesToThemeGraphInput(dayEntries, timeZone, resolveLabel),
-    (profile?.topics ?? []) as TopicId[]
+    (profile?.topics ?? []) as TopicId[],
+    { priorTopicWeights }
   );
 
   const { data: dayStory } = await supabase

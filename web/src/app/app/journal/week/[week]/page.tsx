@@ -5,7 +5,7 @@ import {
   formatWeekRange,
   formatWrittenAt,
 } from "@/lib/datetime";
-import { wordCount } from "@/lib/journal";
+import { entryLocalDateKey, wordCount } from "@/lib/journal";
 import { entriesToThemeGraphInput } from "@/lib/journalGraph";
 import {
   dayGroupsInWeek,
@@ -16,7 +16,7 @@ import {
 import { legacyScheduleFromProfile } from "@/lib/nudges";
 import { formatOnDemandPromptLabel } from "@/lib/prompts/onDemandPrompt";
 import type { TopicId } from "@/lib/promptEngine";
-import { buildDayThemeGraph } from "@/lib/themeGraph";
+import { buildDayThemeGraph, topicWeightsFromEntries } from "@/lib/themeGraph";
 import { sanitizeStoryProse } from "@/lib/storyFormat";
 import { ThemeNetworkGraph } from "@/components/ThemeNetworkGraph";
 import { PeriodStoryPanel } from "@/components/PeriodStoryPanel";
@@ -78,10 +78,19 @@ export default async function JournalWeekPage({ params }: Props) {
     );
   }
 
+  const priorEntries = all.filter(
+    (e) =>
+      entryLocalDateKey(e.written_at, timeZone) < weekStartKey
+  );
+  const priorTopicWeights =
+    priorEntries.length > 0
+      ? topicWeightsFromEntries(priorEntries, (profile?.topics ?? []) as string[])
+      : undefined;
+
   const themeGraph = buildDayThemeGraph(
     entriesToThemeGraphInput(weekEntries, timeZone, resolveLabel),
     (profile?.topics ?? []) as TopicId[],
-    { momentByDay: true }
+    { momentByDay: true, priorTopicWeights }
   );
 
   const { data: periodStory } = await supabase

@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useEffect,
   useId,
   useMemo,
   useRef,
@@ -11,6 +12,7 @@ import {
 } from "react";
 import type {
   DayThemeGraph,
+  GraphContext,
   ThemeGraphEdge,
   ThemeGraphNode,
 } from "@/lib/themeGraph";
@@ -92,6 +94,133 @@ function clientToSvg(svg: SVGSVGElement, clientX: number, clientY: number) {
   return pt.matrixTransform(m.inverse());
 }
 
+function NodeDetailPanel({
+  node,
+  connectedEdges,
+  context,
+  nodes,
+  onClear,
+}: {
+  node: ThemeGraphNode | null;
+  connectedEdges: ThemeGraphEdge[];
+  context?: GraphContext;
+  nodes: ThemeGraphNode[];
+  onClear?: () => void;
+}) {
+  if (!node) {
+    return (
+      <figcaption className="border-t border-ink-border/80 px-3 sm:px-4 py-3 min-h-[3.25rem]">
+        <p className="text-xs text-ink-muted">
+          Tap a node to see what it means in your writing.
+        </p>
+      </figcaption>
+    );
+  }
+
+  const excerpts = context?.excerpts[node.id] ?? [];
+  const bond = node.kind === "topic" ? context?.strongestBond[node.id] : undefined;
+  const trend = node.kind === "topic" ? context?.trends[node.id] : undefined;
+
+  const edgeExplanations: string[] = [];
+  if (context?.edgeExplanations) {
+    for (const edge of connectedEdges.slice(0, 4)) {
+      const key = [edge.source, edge.target].sort().join("|");
+      const exp = context.edgeExplanations[key];
+      if (exp) edgeExplanations.push(exp);
+    }
+  }
+
+  const kindLabel =
+    node.kind === "topic" ? "Theme" : node.kind === "moment" ? "Moment" : "Phrase";
+
+  const weightLabel =
+    node.kind === "topic"
+      ? `${node.weight} ${node.weight === 1 ? "mention" : "mentions"}`
+      : node.kind === "moment"
+        ? `${node.weight} ${node.weight === 1 ? "entry" : "entries"}`
+        : `In ${node.weight} ${node.weight === 1 ? "entry" : "entries"}`;
+
+  const trendLabel =
+    trend === "new"
+      ? "New this period"
+      : trend === "growing"
+        ? "Showing up more"
+        : trend === "fading"
+          ? "Fading lately"
+          : null;
+
+  return (
+    <figcaption className="border-t border-ink-border/80 px-3 sm:px-4 py-3 space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <p className="text-sm font-medium text-ink-fg">
+            {node.label}
+            <span className="ml-2 font-normal text-ink-muted">{kindLabel}</span>
+            {trendLabel && (
+              <span className="ml-2 text-xs text-ink-accent">{trendLabel}</span>
+            )}
+          </p>
+          <p className="text-xs text-ink-muted mt-0.5">
+            {weightLabel} · {connectedEdges.length}{" "}
+            {connectedEdges.length === 1 ? "connection" : "connections"}
+          </p>
+        </div>
+        {onClear && (
+          <button
+            type="button"
+            onClick={onClear}
+            className="text-xs text-ink-accent hover:underline shrink-0"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
+      {bond && (
+        <p className="text-xs text-ink-muted leading-relaxed">
+          <span className="text-ink-fg font-medium">Strongest bond:</span>{" "}
+          {node.label} and {bond.peerLabel} appeared together in{" "}
+          {bond.count} {bond.count === 1 ? "entry" : "entries"}.
+        </p>
+      )}
+
+      {edgeExplanations.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-ink-muted">
+            Connections
+          </p>
+          <ul className="space-y-0.5">
+            {edgeExplanations.map((exp, i) => (
+              <li key={i} className="text-xs text-ink-muted leading-relaxed">
+                {exp}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {excerpts.length > 0 && (
+        <div className="space-y-1.5">
+          <p className="text-[10px] font-medium uppercase tracking-wide text-ink-muted">
+            From your entries
+          </p>
+          {excerpts.map((ex, i) => (
+            <div
+              key={i}
+              className="rounded-xl border border-ink-border/60 bg-ink-bg/50 px-3 py-2"
+            >
+              <p className="text-xs text-ink-fg leading-relaxed italic">
+                &ldquo;{ex.text}&rdquo;
+              </p>
+              <p className="text-[10px] text-ink-muted mt-1">{ex.momentLabel}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </figcaption>
+  );
+}
+
 export function ThemeNetworkGraph({
   graph,
   emphasisIds,
@@ -113,8 +242,6 @@ export function ThemeNetworkGraph({
     last: { x: number; y: number };
   } | null>(null);
 
-  const activeId = selectedId ?? hoveredId;
-
   const maxEdge = useMemo(
     () => Math.max(...edges.map((e) => e.weight), 1),
     [edges]
@@ -129,10 +256,98 @@ export function ThemeNetworkGraph({
     [nodes]
   );
 
-  const pos = useMemo(
-    () => new Map(nodes.map((n) => [n.id, { x: n.x, y: n.y }])),
-    [nodes]
+  const nodeIdSet = useMemo(() => nodes.map((n) => n.id).join(","), [nodes]);
+  useEffect(() => {
+    if (selectedId && !nodeById.has(selectedId)) setSelectedId(null);
+  }, [nodeIdSet, selectedId, nodeById]);
+
+  /* ---- Smooth position interpolation (timeline day transitions) ---- */
+  const animPosRef = useRef(
+    new Map<string, { x: number; y: number; opacity: number }>()
   );
+  const [animPos, setAnimPos] = useState<
+    Map<string, { x: number; y: number; opacity: number }>
+  >(() => {
+    const m = new Map<string, { x: number; y: number; opacity: number }>();
+    for (const n of nodes) m.set(n.id, { x: n.x, y: n.y, opacity: 1 });
+    return m;
+  });
+  const rafRef = useRef(0);
+
+  useEffect(() => {
+    const prev = animPosRef.current;
+    const isInit = prev.size === 0;
+    type AP = { x: number; y: number; opacity: number };
+    const targets = new Map<string, AP>();
+    const starts = new Map<string, AP>();
+
+    for (const n of nodes) {
+      targets.set(n.id, { x: n.x, y: n.y, opacity: 1 });
+      if (isInit) {
+        starts.set(n.id, { x: n.x, y: n.y, opacity: 1 });
+      } else {
+        const p = prev.get(n.id);
+        starts.set(n.id, p ?? { x: n.x, y: n.y, opacity: 0 });
+      }
+    }
+
+    if (isInit) {
+      animPosRef.current = new Map(targets);
+      setAnimPos(new Map(targets));
+      return;
+    }
+
+    const dur = 420;
+    let t0: number | null = null;
+    const tick = (ts: number) => {
+      if (!t0) t0 = ts;
+      const t = Math.min((ts - t0) / dur, 1);
+      const ease = 1 - (1 - t) ** 3;
+      const cur = new Map<string, AP>();
+      for (const n of nodes) {
+        const s = starts.get(n.id)!;
+        const g = targets.get(n.id)!;
+        cur.set(n.id, {
+          x: s.x + (g.x - s.x) * ease,
+          y: s.y + (g.y - s.y) * ease,
+          opacity: s.opacity + (g.opacity - s.opacity) * ease,
+        });
+      }
+      animPosRef.current = cur;
+      setAnimPos(cur);
+      if (t < 1) rafRef.current = requestAnimationFrame(tick);
+    };
+
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [nodes]);
+
+  const displayNodes = useMemo(
+    () =>
+      nodes.map((n) => {
+        const a = animPos.get(n.id);
+        return a ? { ...n, x: a.x, y: a.y } : n;
+      }),
+    [nodes, animPos]
+  );
+
+  const nodeOpacity = useCallback(
+    (id: string) => animPos.get(id)?.opacity ?? 0,
+    [animPos]
+  );
+  /* ---- end animation ---- */
+
+  const activeId = selectedId ?? hoveredId;
+
+  const pos = useMemo(() => {
+    const m = new Map<string, { x: number; y: number }>();
+    for (const n of nodes) {
+      const a = animPos.get(n.id);
+      m.set(n.id, a ? { x: a.x, y: a.y } : { x: n.x, y: n.y });
+    }
+    return m;
+  }, [nodes, animPos]);
 
   const neighbors = useMemo(() => buildAdjacency(edges), [edges]);
 
@@ -258,9 +473,9 @@ export function ThemeNetworkGraph({
     );
   }
 
-  const topicNodes = nodes.filter((n) => n.kind === "topic");
-  const momentNodes = nodes.filter((n) => n.kind === "moment");
-  const signalNodes = nodes.filter((n) => n.kind === "signal");
+  const topicNodes = displayNodes.filter((n) => n.kind === "topic");
+  const momentNodes = displayNodes.filter((n) => n.kind === "moment");
+  const signalNodes = displayNodes.filter((n) => n.kind === "signal");
 
   return (
     <figure className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-ink-border bg-ink-surface/90">
@@ -410,7 +625,7 @@ export function ThemeNetworkGraph({
                     }
                     strokeDasharray={meta.dash}
                     strokeLinecap="round"
-                    className="theme-graph-edge transition-[stroke,stroke-opacity,stroke-width] duration-200"
+                    className="theme-graph-edge"
                     style={{ animationDelay: `${i * 30}ms` }}
                   />
                 );
@@ -418,7 +633,7 @@ export function ThemeNetworkGraph({
             </g>
 
             <g className="theme-graph-nodes">
-              {signalNodes.map((node, i) => {
+              {signalNodes.map((node) => {
                 const s = 4 + (node.weight / maxNode) * 3;
                 const lit = isNodeLit(node.id);
                 const isActive = activeId === node.id;
@@ -428,7 +643,7 @@ export function ThemeNetworkGraph({
                   <g
                     key={node.id}
                     className={`theme-graph-node cursor-pointer outline-none${lit ? "" : " theme-graph-node-dim"}`}
-                    style={{ animationDelay: `${40 + i * 40}ms` }}
+                    style={{ opacity: nodeOpacity(node.id) }}
                     onMouseEnter={() => setHoveredId(node.id)}
                     onMouseLeave={() =>
                       setHoveredId((h) => (h === node.id ? null : h))
@@ -496,7 +711,7 @@ export function ThemeNetworkGraph({
                 );
               })}
 
-              {momentNodes.map((node, i) => {
+              {momentNodes.map((node) => {
                 const r = 5 + (node.weight / maxNode) * 3;
                 const lit = isNodeLit(node.id);
                 const isActive = activeId === node.id;
@@ -506,7 +721,7 @@ export function ThemeNetworkGraph({
                   <g
                     key={node.id}
                     className={`theme-graph-node cursor-pointer outline-none${lit ? "" : " theme-graph-node-dim"}`}
-                    style={{ animationDelay: `${80 + i * 45}ms` }}
+                    style={{ opacity: nodeOpacity(node.id) }}
                     onMouseEnter={() => setHoveredId(node.id)}
                     onMouseLeave={() =>
                       setHoveredId((h) => (h === node.id ? null : h))
@@ -526,12 +741,7 @@ export function ThemeNetworkGraph({
                     aria-pressed={selectedId === node.id}
                     aria-label={`${node.label}, ${node.weight} ${node.weight === 1 ? "entry" : "entries"}`}
                   >
-                    <circle
-                      cx={node.x}
-                      cy={node.y}
-                      r={r + 14}
-                      fill="transparent"
-                    />
+                    <circle cx={node.x} cy={node.y} r={r + 14} fill="transparent" />
                     {isPulse && (
                       <circle
                         cx={node.x}
@@ -559,9 +769,7 @@ export function ThemeNetworkGraph({
                       cy={node.y}
                       r={r}
                       fill="var(--ink-bg)"
-                      stroke={
-                        isActive ? "var(--ink-accent)" : "var(--ink-muted)"
-                      }
+                      stroke={isActive ? "var(--ink-accent)" : "var(--ink-muted)"}
                       strokeWidth={isActive ? 1.75 : 1.25}
                     />
                     <text
@@ -570,10 +778,7 @@ export function ThemeNetworkGraph({
                       textAnchor="middle"
                       fill="var(--ink-muted)"
                       className="font-sans pointer-events-none"
-                      style={{
-                        fontSize: 8.5,
-                        opacity: lit ? 1 : 0.5,
-                      }}
+                      style={{ fontSize: 8.5, opacity: lit ? 1 : 0.5 }}
                     >
                       {node.shortLabel}
                     </text>
@@ -581,17 +786,18 @@ export function ThemeNetworkGraph({
                 );
               })}
 
-              {topicNodes.map((node, i) => {
+              {topicNodes.map((node) => {
                 const r = 12 + (node.weight / maxNode) * 9;
                 const lit = isNodeLit(node.id);
                 const isActive = activeId === node.id;
                 const isPulse = pulseSet.has(node.id);
                 const labelY = node.y + r + 13;
+                const trend = graph.context?.trends[node.id];
                 return (
                   <g
                     key={node.id}
                     className={`theme-graph-node cursor-pointer outline-none${lit ? "" : " theme-graph-node-dim"}`}
-                    style={{ animationDelay: `${60 + i * 50}ms` }}
+                    style={{ opacity: nodeOpacity(node.id) }}
                     onMouseEnter={() => setHoveredId(node.id)}
                     onMouseLeave={() =>
                       setHoveredId((h) => (h === node.id ? null : h))
@@ -609,14 +815,9 @@ export function ThemeNetworkGraph({
                     role="button"
                     tabIndex={0}
                     aria-pressed={selectedId === node.id}
-                    aria-label={`${node.label}, ${node.weight} ${node.weight === 1 ? "mention" : "mentions"}`}
+                    aria-label={`${node.label}, ${node.weight} ${node.weight === 1 ? "mention" : "mentions"}${trend ? `, ${trend}` : ""}`}
                   >
-                    <circle
-                      cx={node.x}
-                      cy={node.y}
-                      r={r + 16}
-                      fill="transparent"
-                    />
+                    <circle cx={node.x} cy={node.y} r={r + 16} fill="transparent" />
                     {isPulse && (
                       <circle
                         cx={node.x}
@@ -649,6 +850,40 @@ export function ThemeNetworkGraph({
                       stroke={node.color}
                       strokeWidth={isActive ? 2.25 : 1.75}
                     />
+                    {trend && trend !== "steady" && lit && (
+                      <g className="pointer-events-none">
+                        <circle
+                          cx={node.x + r * 0.7}
+                          cy={node.y - r * 0.7}
+                          r={5.5}
+                          fill="var(--ink-bg)"
+                          stroke={
+                            trend === "new"
+                              ? "var(--ink-accent)"
+                              : trend === "growing"
+                                ? "#6d8a72"
+                                : "#a07d5c"
+                          }
+                          strokeWidth={1}
+                        />
+                        <text
+                          x={node.x + r * 0.7}
+                          y={node.y - r * 0.7 + 0.5}
+                          textAnchor="middle"
+                          dominantBaseline="central"
+                          fill={
+                            trend === "new"
+                              ? "var(--ink-accent)"
+                              : trend === "growing"
+                                ? "#6d8a72"
+                                : "#a07d5c"
+                          }
+                          style={{ fontSize: 7, fontWeight: 700 }}
+                        >
+                          {trend === "new" ? "N" : trend === "growing" ? "\u2191" : "\u2193"}
+                        </text>
+                      </g>
+                    )}
                     <text
                       x={node.x}
                       y={labelY}
@@ -671,53 +906,13 @@ export function ThemeNetworkGraph({
         </svg>
       </div>
 
-      <figcaption className="border-t border-ink-border/80 px-3 sm:px-4 py-3 min-h-[3.25rem]">
-        {activeNode ? (
-          <div className="space-y-1.5">
-            <p className="text-sm font-medium text-ink-fg">
-              {activeNode.label}
-              <span className="ml-2 font-normal text-ink-muted">
-                {activeNode.kind === "topic"
-                  ? "Theme"
-                  : activeNode.kind === "moment"
-                    ? "Moment"
-                    : "Phrase"}
-              </span>
-            </p>
-            <p className="text-xs text-ink-muted leading-relaxed">
-              {activeNode.kind === "topic"
-                ? `${activeNode.weight} ${activeNode.weight === 1 ? "mention" : "mentions"} in this span`
-                : activeNode.kind === "moment"
-                  ? `${activeNode.weight} ${activeNode.weight === 1 ? "entry" : "entries"} here`
-                  : `Appears in ${activeNode.weight} ${activeNode.weight === 1 ? "entry" : "entries"}`}
-              {connectedEdges.length > 0 && (
-                <>
-                  {" "}
-                  · {connectedEdges.length}{" "}
-                  {connectedEdges.length === 1 ? "link" : "links"}
-                  {connectedEdges.length <= 4
-                    ? `: ${[...new Set(connectedEdges.map((e) => edgeKindLabel(e.kind)))].join(", ")}`
-                    : ""}
-                </>
-              )}
-            </p>
-            {selectedId && (
-              <button
-                type="button"
-                onClick={clearSelection}
-                className="text-xs text-ink-accent hover:underline"
-              >
-                Clear selection
-              </button>
-            )}
-          </div>
-        ) : (
-          <p className="text-xs text-ink-muted">
-            Drag the canvas to pan. Scroll to zoom. Tap a node to highlight its
-            links.
-          </p>
-        )}
-      </figcaption>
+      <NodeDetailPanel
+        node={activeNode}
+        connectedEdges={connectedEdges}
+        context={graph.context}
+        nodes={nodes}
+        onClear={selectedId ? clearSelection : undefined}
+      />
     </figure>
   );
 }
