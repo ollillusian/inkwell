@@ -51,3 +51,13 @@ export type PeriodStory = {
   created_at: string;
   updated_at: string;
 };
+
+export type TimelineInsight = {
+  id: string;
+  user_id: string;
+  cache_key: string;
+  kind: "frame" | "directors_cut";
+  body: string;
+  created_at: string;
+  updated_at: string;
+};

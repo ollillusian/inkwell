@@ -25,6 +25,8 @@ type Props = {
   pulseIds?: string[];
   /** Tighter chrome for timeline / narrow layouts. */
   compact?: boolean;
+  /** Fired when the user selects or clears a node (timeline focus rail). */
+  onSelectedNodeChange?: (nodeId: string | null) => void;
 };
 
 /** Subtle curve so edges don't stack on identical paths. */
@@ -226,6 +228,7 @@ export function ThemeNetworkGraph({
   emphasisIds,
   pulseIds,
   compact = false,
+  onSelectedNodeChange,
 }: Props) {
   const uid = useId().replace(/:/g, "");
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -258,8 +261,11 @@ export function ThemeNetworkGraph({
 
   const nodeIdSet = useMemo(() => nodes.map((n) => n.id).join(","), [nodes]);
   useEffect(() => {
-    if (selectedId && !nodeById.has(selectedId)) setSelectedId(null);
-  }, [nodeIdSet, selectedId, nodeById]);
+    if (selectedId && !nodeById.has(selectedId)) {
+      setSelectedId(null);
+      onSelectedNodeChange?.(null);
+    }
+  }, [nodeIdSet, selectedId, nodeById, onSelectedNodeChange]);
 
   /* ---- Smooth position interpolation (timeline day transitions) ---- */
   const animPosRef = useRef(
@@ -386,13 +392,21 @@ export function ThemeNetworkGraph({
     [highlightIds]
   );
 
-  const selectNode = useCallback((id: string) => {
-    setSelectedId((prev) => (prev === id ? null : id));
-  }, []);
+  const selectNode = useCallback(
+    (id: string) => {
+      setSelectedId((prev) => {
+        const next = prev === id ? null : id;
+        onSelectedNodeChange?.(next);
+        return next;
+      });
+    },
+    [onSelectedNodeChange]
+  );
 
   const clearSelection = useCallback(() => {
     setSelectedId(null);
-  }, []);
+    onSelectedNodeChange?.(null);
+  }, [onSelectedNodeChange]);
 
   const resetView = useCallback(() => {
     setPan({ x: 0, y: 0 });

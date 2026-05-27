@@ -141,3 +141,69 @@ export function runForceDirectedLayout<
     } as unknown as T;
   });
 }
+
+function layoutIdHash(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h);
+}
+
+/** Apply stable positions; unknown nodes sit near linked neighbors or center. */
+export function applyThemeLayout<T extends { id: string; x: number; y: number }>(
+  nodes: T[],
+  edges: SimpleEdge[],
+  registry: Record<string, { x: number; y: number }>,
+  width: number,
+  height: number
+): T[] {
+  const cx = width / 2;
+  const cy = height / 2;
+  const placed = new Map<string, { x: number; y: number }>();
+
+  for (const n of nodes) {
+    const p = registry[n.id];
+    if (p) placed.set(n.id, p);
+  }
+
+  const neighbors = new Map<string, string[]>();
+  const link = (a: string, b: string) => {
+    if (!neighbors.has(a)) neighbors.set(a, []);
+    if (!neighbors.has(b)) neighbors.set(b, []);
+    neighbors.get(a)!.push(b);
+    neighbors.get(b)!.push(a);
+  };
+  for (const e of edges) link(e.source, e.target);
+
+  const resolve = (id: string): { x: number; y: number } => {
+    const cached = placed.get(id);
+    if (cached) return cached;
+
+    const refs: { x: number; y: number }[] = [];
+    for (const nid of neighbors.get(id) ?? []) {
+      const p = placed.get(nid) ?? registry[nid];
+      if (p) refs.push(p);
+    }
+
+    let pos: { x: number; y: number };
+    if (refs.length > 0) {
+      const mx = refs.reduce((s, p) => s + p.x, 0) / refs.length;
+      const my = refs.reduce((s, p) => s + p.y, 0) / refs.length;
+      const angle = ((layoutIdHash(id) % 360) * Math.PI) / 180;
+      const r = 36 + (layoutIdHash(id) % 24);
+      pos = { x: mx + Math.cos(angle) * r, y: my + Math.sin(angle) * r };
+    } else {
+      const angle = ((layoutIdHash(id) % 360) * Math.PI) / 180;
+      const r = 48 + (layoutIdHash(id) % 40);
+      pos = { x: cx + Math.cos(angle) * r, y: cy + Math.sin(angle) * r };
+    }
+    placed.set(id, pos);
+    return pos;
+  };
+
+  return nodes.map((n) => {
+    const p = resolve(n.id);
+    return { ...n, x: p.x, y: p.y };
+  });
+}

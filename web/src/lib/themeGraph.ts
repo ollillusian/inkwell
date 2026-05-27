@@ -4,7 +4,10 @@ import {
   salientPhrasesAcrossEntries,
   type EntryForAnalysis,
 } from "@/lib/themeAnalysis";
-import { runForceDirectedLayout } from "@/lib/themeGraphLayout";
+import {
+  applyThemeLayout,
+  runForceDirectedLayout,
+} from "@/lib/themeGraphLayout";
 import { TOPICS, isValidTopicId, type TopicId } from "@/lib/promptEngine";
 
 export type ThemeGraphNode = {
@@ -101,14 +104,6 @@ export const TOPIC_COLORS: Record<TopicId, string> = {
 const MOMENT_COLOR = "#6b6560";
 const SIGNAL_COLOR = "#5c5348";
 
-function idHash(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) {
-    h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
-  }
-  return Math.abs(h);
-}
-
 type DayEntryInput = {
   id: string;
   topics_snapshot: string[];
@@ -126,6 +121,11 @@ export type ThemeGraphOptions = {
   layoutSeed?: number;
   /** Topic weights from the prior period — used to compute trend (new/growing/steady/fading). */
   priorTopicWeights?: Record<string, number>;
+  /**
+   * Stable positions from a global layout registry (timeline Life map).
+   * Skips per-period force layout when set.
+   */
+  fixedPositions?: Record<string, { x: number; y: number }>;
 };
 
 function topicLabel(id: TopicId): string {
@@ -309,23 +309,35 @@ export function buildDayThemeGraph(
     }
   );
 
-  const layoutSeed =
-    options.layoutSeed ??
-    entries.map((e) => e.id).join("").length +
-      topicIds.length * 17 +
-      momentIds.length * 31;
+  const edgeInputs = edges.map((e) => ({
+    source: e.source,
+    target: e.target,
+    weight: e.weight,
+  }));
 
-  nodes = runForceDirectedLayout(
-    nodes,
-    edges.map((e) => ({
-      source: e.source,
-      target: e.target,
-      weight: e.weight,
-    })),
-    GRAPH_WIDTH,
-    GRAPH_HEIGHT,
-    layoutSeed
-  );
+  if (options.fixedPositions && Object.keys(options.fixedPositions).length > 0) {
+    nodes = applyThemeLayout(
+      nodes,
+      edges,
+      options.fixedPositions,
+      GRAPH_WIDTH,
+      GRAPH_HEIGHT
+    );
+  } else {
+    const layoutSeed =
+      options.layoutSeed ??
+      entries.map((e) => e.id).join("").length +
+        topicIds.length * 17 +
+        momentIds.length * 31;
+
+    nodes = runForceDirectedLayout(
+      nodes,
+      edgeInputs,
+      GRAPH_WIDTH,
+      GRAPH_HEIGHT,
+      layoutSeed
+    );
+  }
 
   const context = buildGraphContext(
     entries,

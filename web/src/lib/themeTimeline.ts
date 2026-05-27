@@ -1,6 +1,16 @@
-import { formatLocalDateLong, zonedLocalToUtc } from "@/lib/datetime";
+import {
+  formatLocalDateLong,
+  formatMonthLabel,
+  formatWeekRange,
+  zonedLocalToUtc,
+} from "@/lib/datetime";
 import { groupEntriesByLocalDay } from "@/lib/journal";
+import {
+  groupEntriesByLocalMonth,
+  groupEntriesByLocalWeek,
+} from "@/lib/journalPeriod";
 import { entriesToThemeGraphInput } from "@/lib/journalGraph";
+import { buildStepBeat, buildStepCaption } from "@/lib/themeNarrative";
 import type { TopicId } from "@/lib/promptEngine";
 import {
   buildDayThemeGraph,
@@ -8,7 +18,10 @@ import {
   type DayThemeGraph,
   type ThemeGraphNode,
 } from "@/lib/themeGraph";
+import { buildThemeLayoutRegistry } from "@/lib/themeLayout";
 import type { Entry } from "@/types/database";
+
+export type ThemeTimelineGranularity = "day" | "week" | "month";
 
 export type ThemeTimelineStats = {
   topics: number;
@@ -36,10 +49,21 @@ export type ThemeTimelineStep = {
   dateLabel: string;
   shortLabel: string;
   weekday: string;
+  granularity: ThemeTimelineGranularity;
   entryCount: number;
   stats: ThemeTimelineStats;
   graph: DayThemeGraph;
   change: ThemeTimelineChange | null;
+  caption: string;
+  beat: ReturnType<typeof buildStepBeat>;
+  journalHref: string;
+  /** Heaviest topic this step — used for calendar heatmap color. */
+  dominantTopicId: string | null;
+};
+
+export type BuildThemeTimelineOptions = {
+  granularity?: ThemeTimelineGranularity;
+  maxSteps?: number;
 };
 
 export function timelineEmphasisIds(step: ThemeTimelineStep): string[] {
@@ -70,7 +94,13 @@ function topicIds(nodes: ThemeGraphNode[]): string[] {
   return nodes.filter((n) => n.kind === "topic").map((n) => n.id);
 }
 
-function compareDays(
+function dominantTopic(nodes: ThemeGraphNode[]): string | null {
+  const topics = nodes.filter((n) => n.kind === "topic");
+  if (topics.length === 0) return null;
+  return topics.reduce((a, b) => (b.weight > a.weight ? b : a)).id;
+}
+
+export function compareTimelineGraphs(
   prev: DayThemeGraph,
   curr: DayThemeGraph
 ): Omit<ThemeTimelineChange, "firstDay"> {
@@ -150,42 +180,123 @@ function dayLabels(
   };
 }
 
+type PeriodRow = {
+  key: string;
+  entries: Entry[];
+  dateLabel: string;
+  shortLabel: string;
+  weekday: string;
+  journalHref: string;
+};
+
+function maxStepsFor(granularity: ThemeTimelineGranularity): number {
+  switch (granularity) {
+    case "week":
+      return 26;
+    case "month":
+      return 18;
+    default:
+      return 45;
+  }
+}
+
+function periodRows(
+  entries: Entry[],
+  timeZone: string,
+  granularity: ThemeTimelineGranularity,
+  maxSteps: number
+): PeriodRow[] {
+  if (granularity === "week") {
+    return groupEntriesByLocalWeek(entries, timeZone)
+      .slice(0, maxSteps)
+      .reverse()
+      .map(({ weekStartKey, entries: periodEntries }) => ({
+        key: weekStartKey,
+        entries: periodEntries,
+        dateLabel: formatWeekRange(weekStartKey, timeZone),
+        shortLabel: formatWeekRange(weekStartKey, timeZone),
+        weekday: "Week",
+        journalHref: `/app/journal/week/${weekStartKey}`,
+      }));
+  }
+
+  if (granularity === "month") {
+    return groupEntriesByLocalMonth(entries, timeZone)
+      .slice(0, maxSteps)
+      .reverse()
+      .map(({ monthKey, entries: periodEntries }) => ({
+        key: monthKey,
+        entries: periodEntries,
+        dateLabel: formatMonthLabel(monthKey, timeZone),
+        shortLabel: formatMonthLabel(monthKey, timeZone),
+        weekday: "Month",
+        journalHref: `/app/journal/month/${monthKey}`,
+      }));
+  }
+
+  return groupEntriesByLocalDay(entries, timeZone)
+    .slice(0, maxSteps)
+    .reverse()
+    .map(({ dateKey, entries: periodEntries }) => {
+      const [y, mo, d] = dateKey.split("-").map(Number);
+      const dayDate = zonedLocalToUtc(y, mo, d, 12, 0, timeZone);
+      const labels = dayLabels(dateKey, dayDate, timeZone);
+      return {
+        key: dateKey,
+        entries: periodEntries,
+        dateLabel: labels.dateLabel,
+        shortLabel: labels.shortLabel,
+        weekday: labels.weekday,
+        journalHref: `/app/journal/${dateKey}`,
+      };
+    });
+}
+
 /** Chronological steps (oldest → newest) for timeline slider. */
 export function buildThemeTimeline(
   entries: Entry[],
   timeZone: string,
   resolveLabel: (slot: string) => string,
   profileTopics: TopicId[],
-  maxDays = 45
+  options: BuildThemeTimelineOptions = {}
 ): ThemeTimelineStep[] {
-  const days = groupEntriesByLocalDay(entries, timeZone)
-    .slice(0, maxDays)
-    .reverse();
+  const granularity = options.granularity ?? "day";
+  const maxSteps = options.maxSteps ?? maxStepsFor(granularity);
+  const periods = periodRows(entries, timeZone, granularity, maxSteps);
+
+  const rangeEntries = periods.flatMap((p) => p.entries);
+  const layoutRegistry =
+    rangeEntries.length > 0
+      ? buildThemeLayoutRegistry(
+          entriesToThemeGraphInput(rangeEntries, timeZone, resolveLabel),
+          profileTopics
+        )
+      : {};
 
   const steps: ThemeTimelineStep[] = [];
   let prevGraph: DayThemeGraph | null = null;
   let cumulativePriorEntries: Entry[] = [];
 
-  for (const { dateKey, entries: dayEntries } of days) {
-    const [y, mo, d] = dateKey.split("-").map(Number);
-    const dayDate = zonedLocalToUtc(y, mo, d, 12, 0, timeZone);
-
+  for (const period of periods) {
     const priorTopicWeights =
       cumulativePriorEntries.length > 0
-        ? topicWeightsFromEntries(cumulativePriorEntries, profileTopics as string[])
+        ? topicWeightsFromEntries(
+            cumulativePriorEntries,
+            profileTopics as string[]
+          )
         : undefined;
 
     const graph = buildDayThemeGraph(
-      entriesToThemeGraphInput(dayEntries, timeZone, resolveLabel),
+      entriesToThemeGraphInput(period.entries, timeZone, resolveLabel),
       profileTopics,
       {
-        layoutSeed: 42,
         priorTopicWeights,
+        fixedPositions: layoutRegistry,
       }
     );
 
     const change: ThemeTimelineChange | null = prevGraph
-      ? { firstDay: false, ...compareDays(prevGraph, graph) }
+      ? { firstDay: false, ...compareTimelineGraphs(prevGraph, graph) }
       : {
           firstDay: true,
           newTopics: [],
@@ -213,21 +324,29 @@ export function buildThemeTimeline(
         .map((n) => n.id);
     }
 
-    const labels = dayLabels(dateKey, dayDate, timeZone);
-
-    steps.push({
-      dateKey,
-      dateLabel: labels.dateLabel,
-      shortLabel: labels.shortLabel,
-      weekday: labels.weekday,
-      entryCount: dayEntries.length,
+    const draft: ThemeTimelineStep = {
+      dateKey: period.key,
+      dateLabel: period.dateLabel,
+      shortLabel: period.shortLabel,
+      weekday: period.weekday,
+      granularity,
+      entryCount: period.entries.length,
       stats: graphStats(graph),
       graph,
       change,
-    });
+      caption: "",
+      beat: "open",
+      journalHref: period.journalHref,
+      dominantTopicId: dominantTopic(graph.nodes),
+    };
+
+    draft.caption = buildStepCaption(draft);
+    draft.beat = buildStepBeat(draft);
+
+    steps.push(draft);
 
     prevGraph = graph;
-    cumulativePriorEntries = [...cumulativePriorEntries, ...dayEntries];
+    cumulativePriorEntries = [...cumulativePriorEntries, ...period.entries];
   }
 
   return steps;

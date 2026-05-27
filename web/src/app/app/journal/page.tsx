@@ -19,11 +19,12 @@ import {
   JournalViewTabs,
   type JournalView,
 } from "@/components/JournalViewTabs";
-import { ThemeTimelineSlider } from "@/components/ThemeTimelineSlider";
+import { ThemeInsightsPanel } from "@/components/ThemeInsightsPanel";
+import { buildThemeWritingDigest } from "@/lib/themeInsightsDigest";
+import { buildThemeTimeline } from "@/lib/themeTimeline";
 import { legacyScheduleFromProfile } from "@/lib/nudges";
 import { formatOnDemandPromptLabel } from "@/lib/prompts/onDemandPrompt";
 import type { TopicId } from "@/lib/promptEngine";
-import { buildThemeTimeline } from "@/lib/themeTimeline";
 import type { Entry } from "@/types/database";
 
 export const dynamic = "force-dynamic";
@@ -97,14 +98,21 @@ export default async function JournalPage({ searchParams }: Props) {
   const weeks = groupEntriesByLocalWeek(list, timeZone);
   const months = groupEntriesByLocalMonth(list, timeZone);
 
-  const timelineSteps =
-    view === "timeline"
-      ? buildThemeTimeline(list, timeZone, resolveLabel, profileTopics)
-      : [];
+  const themeDigest =
+    list.length >= 2
+      ? buildThemeWritingDigest(
+          buildThemeTimeline(list, timeZone, resolveLabel, profileTopics, {
+            granularity: "day",
+            maxSteps: 14,
+          }),
+          profileTopics,
+          7
+        )
+      : null;
 
   const blurb =
     view === "timeline"
-      ? "Scrub days to see how your theme map grows (last 45 days with entries)."
+      ? "Watch your theme map evolve — by day, week, or month. Play, compare periods, or tap a theme to trace it."
       : view === "weeks"
         ? "Open a week for a theme map, woven story, and entries grouped by day."
         : view === "months"
@@ -121,8 +129,22 @@ export default async function JournalPage({ searchParams }: Props) {
 
       {view === "timeline" && (
         <div className="w-full min-w-0">
-          <ThemeTimelineSlider steps={timelineSteps} />
+          <ThemeInsightsPanel
+            entries={list}
+            timeZone={timeZone}
+            labelById={labelById}
+            profileTopics={profileTopics}
+          />
         </div>
+      )}
+
+      {view === "days" && themeDigest && (
+        <p className="text-sm text-ink-muted leading-relaxed rounded-xl border border-ink-border/60 bg-ink-surface/50 px-4 py-3">
+          {themeDigest.headline}{" "}
+          <Link href="/app/journal?view=timeline" className="text-ink-accent hover:underline">
+            Watch timeline →
+          </Link>
+        </p>
       )}
 
       {view === "days" && (

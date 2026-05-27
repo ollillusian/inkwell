@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { TodayPrompt } from "@/components/TodayPrompt";
+import { TodayThemeInsight } from "@/components/TodayThemeInsight";
 import { PromptSkeleton } from "@/components/PromptSkeleton";
 import { OnDemandPrompt } from "@/components/OnDemandPrompt";
 import {
@@ -47,6 +48,7 @@ export default async function TodayPage() {
 
   return (
     <div className="space-y-8">
+      <TodayThemeInsight />
       <OnDemandPrompt initialPrompts={recentPrompts} />
       <Suspense fallback={<PromptSkeleton />}>
         <section className="space-y-3 border-t border-ink-border/80 pt-8">
