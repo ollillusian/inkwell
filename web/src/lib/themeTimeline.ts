@@ -64,6 +64,7 @@ export type ThemeTimelineStep = {
 export type BuildThemeTimelineOptions = {
   granularity?: ThemeTimelineGranularity;
   maxSteps?: number;
+  includeEntities?: boolean;
 };
 
 export function timelineEmphasisIds(step: ThemeTimelineStep): string[] {
@@ -262,6 +263,7 @@ export function buildThemeTimeline(
 ): ThemeTimelineStep[] {
   const granularity = options.granularity ?? "day";
   const maxSteps = options.maxSteps ?? maxStepsFor(granularity);
+  const includeEntities = options.includeEntities ?? false;
   const periods = periodRows(entries, timeZone, granularity, maxSteps);
 
   const rangeEntries = periods.flatMap((p) => p.entries);
@@ -292,6 +294,8 @@ export function buildThemeTimeline(
       {
         priorTopicWeights,
         fixedPositions: layoutRegistry,
+        includeEntities,
+        maxEntities: 18,
       }
     );
 

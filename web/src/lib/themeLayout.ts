@@ -20,7 +20,10 @@ export function buildThemeLayoutRegistry(
   profileTopics: TopicId[] = [],
   layoutSeed = 42
 ): ThemeLayoutRegistry {
-  const graph = buildDayThemeGraph(entries, profileTopics, { layoutSeed });
+  const graph = buildDayThemeGraph(entries, profileTopics, {
+    layoutSeed,
+    includeEntities: true,
+  });
   const registry: ThemeLayoutRegistry = {};
   for (const n of graph.nodes) {
     registry[n.id] = { x: n.x, y: n.y };

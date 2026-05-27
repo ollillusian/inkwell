@@ -133,6 +133,7 @@ export function ThemeTimelineSlider({ steps }: Props) {
   const [aiCaption, setAiCaption] = useState<string | null>(null);
   const [directorsCut, setDirectorsCut] = useState<string | null>(null);
   const [useAiCaption, setUseAiCaption] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const filmstripRef = useRef<HTMLDivElement>(null);
   const touchRef = useRef<{ x: number; y: number } | null>(null);
   const graphHostRef = useRef<HTMLDivElement>(null);
@@ -268,14 +269,22 @@ export function ThemeTimelineSlider({ steps }: Props) {
   }, [steps]);
 
   const exportGraph = useCallback(async (format: "svg" | "png") => {
+    setExportError(null);
     const svg = graphHostRef.current?.querySelector("svg");
-    if (!svg) return;
+    if (!svg) {
+      setExportError("Could not find graph SVG to export.");
+      return;
+    }
     const name = `inkwell-map-${step?.dateKey ?? "frame"}`;
     if (format === "svg") {
       downloadSvgElement(svg, `${name}.svg`);
       return;
     }
-    await downloadSvgAsPng(svg, `${name}.png`);
+    try {
+      await downloadSvgAsPng(svg, `${name}.png`);
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : "PNG export failed");
+    }
   }, [step?.dateKey]);
 
   const go = useCallback(
@@ -529,6 +538,9 @@ export function ThemeTimelineSlider({ steps }: Props) {
 
       {insightError && (
         <p className="text-[10px] text-amber-800/90 px-0.5">{insightError}</p>
+      )}
+      {exportError && (
+        <p className="text-[10px] text-amber-800/90 px-0.5">{exportError}</p>
       )}
 
       {compareMode && (

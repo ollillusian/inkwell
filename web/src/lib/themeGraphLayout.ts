@@ -39,6 +39,7 @@ export function runForceDirectedLayout<
     if (!n) return 1;
     if (n.kind === "moment") return 0.85;
     if (n.kind === "signal") return 0.7;
+    if (n.kind === "entity") return 0.75;
     return 1.15;
   };
 
@@ -57,7 +58,12 @@ export function runForceDirectedLayout<
         let dy = pos[j]!.y - pos[i]!.y;
         let dist = Math.hypot(dx, dy) || 0.01;
         const minD =
-          pos[i]!.kind === "signal" || pos[j]!.kind === "signal" ? 36 : 48;
+          pos[i]!.kind === "signal" ||
+          pos[j]!.kind === "signal" ||
+          pos[i]!.kind === "entity" ||
+          pos[j]!.kind === "entity"
+            ? 36
+            : 48;
         const kRep = 5200;
         const f = kRep / (dist * dist);
         dx /= dist;

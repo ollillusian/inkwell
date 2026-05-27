@@ -82,6 +82,8 @@ function edgeKindLabel(kind: ThemeGraphEdge["kind"]): string {
       return "Same entry";
     case "phrase":
       return "Recurring phrase";
+    case "entity":
+      return "Mentioned together";
     default:
       return "Moment link";
   }
@@ -133,13 +135,21 @@ function NodeDetailPanel({
   }
 
   const kindLabel =
-    node.kind === "topic" ? "Theme" : node.kind === "moment" ? "Moment" : "Phrase";
+    node.kind === "topic"
+      ? "Theme"
+      : node.kind === "moment"
+        ? "Moment"
+        : node.kind === "entity"
+          ? "Entity"
+          : "Phrase";
 
   const weightLabel =
     node.kind === "topic"
       ? `${node.weight} ${node.weight === 1 ? "mention" : "mentions"}`
       : node.kind === "moment"
         ? `${node.weight} ${node.weight === 1 ? "entry" : "entries"}`
+        : node.kind === "entity"
+          ? `Mentioned in ${node.weight} ${node.weight === 1 ? "entry" : "entries"}`
         : `In ${node.weight} ${node.weight === 1 ? "entry" : "entries"}`;
 
   const trendLabel =
@@ -490,6 +500,7 @@ export function ThemeNetworkGraph({
   const topicNodes = displayNodes.filter((n) => n.kind === "topic");
   const momentNodes = displayNodes.filter((n) => n.kind === "moment");
   const signalNodes = displayNodes.filter((n) => n.kind === "signal");
+  const entityNodes = displayNodes.filter((n) => n.kind === "entity");
 
   return (
     <figure className="w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-ink-border bg-ink-surface/90">
@@ -571,6 +582,10 @@ export function ThemeNetworkGraph({
               <span className="w-2 h-2 rounded-sm border border-dashed border-ink-fg/35 bg-ink-bg" />
               Phrase
             </span>
+            <span className="flex items-center gap-1">
+              <span className="w-2 h-2 rotate-45 bg-ink-muted/50" />
+              Entity
+            </span>
           </div>
         </div>
       </div>
@@ -647,6 +662,81 @@ export function ThemeNetworkGraph({
             </g>
 
             <g className="theme-graph-nodes">
+              {entityNodes.map((node) => {
+                const s = 6 + (node.weight / maxNode) * 3;
+                const lit = isNodeLit(node.id);
+                const isActive = activeId === node.id;
+                const isPulse = pulseSet.has(node.id);
+                const labelY = node.y + s + 12;
+                return (
+                  <g
+                    key={node.id}
+                    className={`theme-graph-node cursor-pointer outline-none${lit ? "" : " theme-graph-node-dim"}`}
+                    style={{ opacity: nodeOpacity(node.id) }}
+                    onMouseEnter={() => setHoveredId(node.id)}
+                    onMouseLeave={() =>
+                      setHoveredId((h) => (h === node.id ? null : h))
+                    }
+                    onClick={(ev) => {
+                      ev.stopPropagation();
+                      selectNode(node.id);
+                    }}
+                    onKeyDown={(ev) => {
+                      if (ev.key === "Enter" || ev.key === " ") {
+                        ev.preventDefault();
+                        selectNode(node.id);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={selectedId === node.id}
+                    aria-label={`${node.label}, mentioned in ${node.weight} ${node.weight === 1 ? "entry" : "entries"}`}
+                  >
+                    <rect
+                      x={node.x - (s + 14)}
+                      y={node.y - (s + 14)}
+                      width={(s + 14) * 2}
+                      height={(s + 14) * 2}
+                      fill="transparent"
+                    />
+                    {isPulse && (
+                      <rect
+                        x={node.x - (s + 7)}
+                        y={node.y - (s + 7)}
+                        width={(s + 7) * 2}
+                        height={(s + 7) * 2}
+                        fill="none"
+                        stroke="var(--ink-accent)"
+                        strokeWidth={1}
+                        className="theme-graph-pulse"
+                        transform={`rotate(45 ${node.x} ${node.y})`}
+                      />
+                    )}
+                    <rect
+                      x={node.x - s}
+                      y={node.y - s}
+                      width={s * 2}
+                      height={s * 2}
+                      fill={node.color}
+                      fillOpacity={isActive ? 0.25 : 0.16}
+                      stroke={isActive ? "var(--ink-accent)" : node.color}
+                      strokeWidth={isActive ? 1.75 : 1.25}
+                      transform={`rotate(45 ${node.x} ${node.y})`}
+                      rx={2}
+                    />
+                    <text
+                      x={node.x}
+                      y={labelY}
+                      textAnchor="middle"
+                      fill="var(--ink-muted)"
+                      className="font-sans pointer-events-none"
+                      style={{ fontSize: 8.5, opacity: lit ? 1 : 0.5 }}
+                    >
+                      {node.shortLabel}
+                    </text>
+                  </g>
+                );
+              })}
               {signalNodes.map((node) => {
                 const s = 4 + (node.weight / maxNode) * 3;
                 const lit = isNodeLit(node.id);

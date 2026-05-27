@@ -14,7 +14,7 @@ export type ThemeGraphNode = {
   id: string;
   label: string;
   shortLabel: string;
-  kind: "topic" | "moment" | "signal";
+  kind: "topic" | "moment" | "signal" | "entity";
   weight: number;
   x: number;
   y: number;
@@ -25,7 +25,7 @@ export type ThemeGraphEdge = {
   source: string;
   target: string;
   weight: number;
-  kind: "cooccur" | "flow" | "moment" | "phrase";
+  kind: "cooccur" | "flow" | "moment" | "phrase" | "entity";
 };
 
 /** A snippet of entry text associated with a topic or phrase. */
@@ -103,6 +103,7 @@ export const TOPIC_COLORS: Record<TopicId, string> = {
 
 const MOMENT_COLOR = "#6b6560";
 const SIGNAL_COLOR = "#5c5348";
+const ENTITY_COLOR = "#4f5f6d";
 
 type DayEntryInput = {
   id: string;
@@ -121,12 +122,93 @@ export type ThemeGraphOptions = {
   layoutSeed?: number;
   /** Topic weights from the prior period — used to compute trend (new/growing/steady/fading). */
   priorTopicWeights?: Record<string, number>;
+  /** Include lightweight entity nodes (people/places) from text. */
+  includeEntities?: boolean;
+  /** Max entity nodes to keep (top by weight). */
+  maxEntities?: number;
   /**
    * Stable positions from a global layout registry (timeline Life map).
    * Skips per-period force layout when set.
    */
   fixedPositions?: Record<string, { x: number; y: number }>;
 };
+
+const ENTITY_STOP = new Set(
+  [
+    "I",
+    "A",
+    "An",
+    "The",
+    "And",
+    "But",
+    "Or",
+    "So",
+    "To",
+    "Of",
+    "In",
+    "On",
+    "At",
+    "For",
+    "With",
+    "From",
+    "As",
+    "It",
+    "This",
+    "That",
+    "Today",
+    "Yesterday",
+    "Tomorrow",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+    "Sunday",
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+  ].map((s) => s.toLowerCase())
+);
+
+function slugifyEntity(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+}
+
+/**
+ * Lightweight entity extractor (rule-based).
+ * Pulls capitalized word sequences like "New York" or "Sam" from the body.
+ */
+function extractEntitiesFromText(body: string): string[] {
+  const clean = body.replace(/\s+/g, " ").trim();
+  if (!clean) return [];
+
+  const hits = new Set<string>();
+  const re =
+    /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2})\b/g; // 1–3 word titlecase
+  for (const m of clean.matchAll(re)) {
+    const raw = m[1]?.trim();
+    if (!raw) continue;
+    const lower = raw.toLowerCase();
+    if (ENTITY_STOP.has(lower)) continue;
+    if (raw.length < 3) continue;
+    hits.add(raw);
+  }
+  return [...hits].slice(0, 12);
+}
 
 function topicLabel(id: TopicId): string {
   return TOPICS[id]?.label ?? id;
@@ -171,12 +253,14 @@ export function buildDayThemeGraph(
 
   const topicWeight = new Map<string, number>();
   const momentWeight = new Map<string, number>();
+  const entityWeight = new Map<string, number>();
   const edgeMap = new Map<
     string,
     { weight: number; kind: ThemeGraphEdge["kind"] }
   >();
 
   const chronology: TopicId[][] = [];
+  const entryEntities: string[][] = [];
   const entryToMoment = new Map<string, string>();
 
   for (let idx = 0; idx < entries.length; idx++) {
@@ -196,9 +280,22 @@ export function buildDayThemeGraph(
     entryToMoment.set(entry.id, momentId);
     momentWeight.set(momentId, (momentWeight.get(momentId) ?? 0) + 1);
 
+    const entities =
+      options.includeEntities ? extractEntitiesFromText(entry.body) : [];
+    entryEntities.push(entities);
+
     for (const t of topics) {
       topicWeight.set(t, (topicWeight.get(t) ?? 0) + 1);
       addEdge(edgeMap, t, momentId, "moment", 1);
+    }
+
+    if (entities.length > 0) {
+      for (const eLabel of entities) {
+        const eId = `entity:${slugifyEntity(eLabel)}`;
+        entityWeight.set(eId, (entityWeight.get(eId) ?? 0) + 1);
+        addEdge(edgeMap, eId, momentId, "entity", 1);
+        for (const t of topics) addEdge(edgeMap, eId, t, "entity", 1);
+      }
     }
 
     for (let i = 0; i < topics.length; i++) {
@@ -242,6 +339,7 @@ export function buildDayThemeGraph(
 
   const topicIds = [...topicWeight.keys()];
   const momentIds = [...momentWeight.keys()];
+  const entityIds = [...entityWeight.keys()];
 
   const cx = GRAPH_WIDTH / 2;
   const cy = GRAPH_HEIGHT / 2;
@@ -296,10 +394,34 @@ export function buildDayThemeGraph(
     };
   });
 
+  const entityNodes: ThemeGraphNode[] = (() => {
+    if (!options.includeEntities) return [];
+    const limit = Math.max(0, options.maxEntities ?? 18);
+    const sorted = entityIds
+      .map((id) => ({ id, w: entityWeight.get(id) ?? 1 }))
+      .sort((a, b) => b.w - a.w)
+      .slice(0, limit);
+    return sorted.map(({ id, w }) => {
+      const label = id.replace(/^entity:/, "").replace(/-/g, " ");
+      const pretty = label.replace(/\b\w/g, (c) => c.toUpperCase());
+      return {
+        id,
+        label: pretty,
+        shortLabel: shortLabel(pretty, 16),
+        kind: "entity" as const,
+        weight: w,
+        x: 0,
+        y: 0,
+        color: ENTITY_COLOR,
+      };
+    });
+  })();
+
   let nodes: ThemeGraphNode[] = [
     ...topicNodes,
     ...momentNodesList,
     ...phraseNodes,
+    ...entityNodes,
   ];
 
   const edges: ThemeGraphEdge[] = [...edgeMap.entries()].map(
@@ -308,6 +430,14 @@ export function buildDayThemeGraph(
       return { source, target, weight, kind };
     }
   );
+
+  // If we limited entity nodes, drop edges that point to filtered entities.
+  if (entityNodes.length > 0 && options.includeEntities) {
+    const keep = new Set(nodes.map((n) => n.id));
+    const filtered = edges.filter((e) => keep.has(e.source) && keep.has(e.target));
+    edges.length = 0;
+    edges.push(...filtered);
+  }
 
   const edgeInputs = edges.map((e) => ({
     source: e.source,
@@ -343,6 +473,7 @@ export function buildDayThemeGraph(
     entries,
     corpusEntries,
     chronology,
+    entryEntities,
     entryToMoment,
     edgeMap,
     nodes,
@@ -376,6 +507,7 @@ function buildGraphContext(
   entries: DayEntryInput[],
   corpus: EntryForAnalysis[],
   chronology: TopicId[][],
+  entryEntities: string[][],
   entryToMoment: Map<string, string>,
   edgeMap: Map<string, { weight: number; kind: ThemeGraphEdge["kind"] }>,
   nodes: ThemeGraphNode[],
@@ -387,6 +519,7 @@ function buildGraphContext(
   for (let idx = 0; idx < entries.length; idx++) {
     const entry = entries[idx]!;
     const topics = chronology[idx]!;
+    const entities = entryEntities[idx] ?? [];
     const momentId = entryToMoment.get(entry.id) ?? "";
     const momentNode = nodes.find((n) => n.id === momentId);
     const momentLabel = momentNode?.label ?? entry.nudgeLabel;
@@ -397,6 +530,16 @@ function buildGraphContext(
       if (!excerpts[tid]) excerpts[tid] = [];
       if (excerpts[tid].length < 3) {
         excerpts[tid].push({ entryId: entry.id, momentLabel, text: snippet });
+      }
+    }
+
+    if (options.includeEntities && entities.length > 0) {
+      for (const eLabel of entities) {
+        const eid = `entity:${slugifyEntity(eLabel)}`;
+        if (!excerpts[eid]) excerpts[eid] = [];
+        if (excerpts[eid].length < 3) {
+          excerpts[eid].push({ entryId: entry.id, momentLabel, text: snippet });
+        }
       }
     }
 

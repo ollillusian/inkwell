@@ -77,7 +77,8 @@ export async function downloadSvgAsPng(
   clone.setAttribute("height", String(h));
 
   const source = new XMLSerializer().serializeToString(clone);
-  const url = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(source)}`;
+  const svgBlob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
+  const url = URL.createObjectURL(svgBlob);
 
   await new Promise<void>((resolve, reject) => {
     const img = new Image();
@@ -87,6 +88,7 @@ export async function downloadSvgAsPng(
       canvas.height = h * scale;
       const ctx = canvas.getContext("2d");
       if (!ctx) {
+        URL.revokeObjectURL(url);
         reject(new Error("Canvas unavailable"));
         return;
       }
@@ -98,6 +100,7 @@ export async function downloadSvgAsPng(
       ctx.drawImage(img, 0, 0, w, h);
       canvas.toBlob((blob) => {
         if (!blob) {
+          URL.revokeObjectURL(url);
           reject(new Error("PNG export failed"));
           return;
         }
@@ -107,10 +110,14 @@ export async function downloadSvgAsPng(
         a.download = filename;
         a.click();
         URL.revokeObjectURL(obj);
+        URL.revokeObjectURL(url);
         resolve();
       }, "image/png");
     };
-    img.onerror = () => reject(new Error("SVG rasterize failed"));
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("SVG rasterize failed"));
+    };
     img.src = url;
   });
 }
