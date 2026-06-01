@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { NotificationScheduler } from "@/components/NotificationScheduler";
-import { legacyScheduleFromProfile } from "@/lib/nudges";
+import { PushNotificationSetup } from "@/components/PushNotificationSetup";
+import { scheduleConfigFromProfile } from "@/lib/notifications";
 import type { Profile } from "@/types/database";
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
@@ -24,17 +25,20 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const schedule = legacyScheduleFromProfile(profile ?? {});
+  const schedule = scheduleConfigFromProfile(profile ?? {});
 
   return (
     <>
       {profile?.notifications_enabled && (
-        <NotificationScheduler
-          userId={profile.id}
-          config={schedule}
-          nudgesFired={profile.nudges_fired ?? []}
-          timeZone={profile.timezone || "UTC"}
-        />
+        <>
+          <PushNotificationSetup enabled />
+          <NotificationScheduler
+            userId={profile.id}
+            config={schedule}
+            nudgesFired={profile.nudges_fired ?? []}
+            timeZone={profile.timezone || "UTC"}
+          />
+        </>
       )}
       {children}
     </>

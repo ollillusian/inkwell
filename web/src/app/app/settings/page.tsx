@@ -10,6 +10,7 @@ import {
   legacyScheduleFromProfile,
   type NudgeScheduleConfig,
 } from "@/lib/nudges";
+import { PushNotificationSetup } from "@/components/PushNotificationSetup";
 import { requestNotificationPermission } from "@/lib/notifications";
 import { WritingVoicePicker } from "@/components/WritingVoicePicker";
 import { HumanOnlyBanner } from "@/components/HumanOnlyBanner";
@@ -153,8 +154,14 @@ export default function SettingsPage() {
             onChange={(e) => setNotifications(e.target.checked)}
             className="rounded border-ink-border"
           />
-          <span className="text-sm">Browser reminders (when app is open)</span>
+          <span className="text-sm">Reminders (push + in-app)</span>
         </label>
+        <p className="text-xs text-ink-muted leading-relaxed">
+          For nudges when Inkwell is closed: allow notifications, then on iPhone use
+          Share → Add to Home Screen. Android/desktop: install the app from the
+          browser menu.
+        </p>
+        {notifications && <PushNotificationSetup enabled />}
       </section>
 
       <HumanOnlyBanner />

@@ -47,6 +47,22 @@ Without Supabase you cannot sign in or save journal entries. Prompt generation o
 Use **publishable OR anon**, not the secret key (`sb_secret_...`).
 | `OPENAI_API_KEY` | Prompt generation |
 | `OPENAI_MODEL` | Optional, default `gpt-4o-mini` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Cron nudge push (server only) |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Web Push public key (`npx web-push generate-vapid-keys`) |
+| `VAPID_PRIVATE_KEY` | Web Push private key |
+| `VAPID_SUBJECT` | e.g. `mailto:you@example.com` |
+| `CRON_SECRET` | Random string; protects `/api/cron/send-nudges` |
+
+### Nudge cron (push when app is closed)
+
+Add a **Cron** job in Railway (or any scheduler) that calls **every minute**:
+
+```http
+GET https://YOUR_APP.up.railway.app/api/cron/send-nudges
+Authorization: Bearer YOUR_CRON_SECRET
+```
+
+Run migration `web/supabase/migrations/008_push_subscriptions.sql` in Supabase.
 
 Railway sets `PORT` automatically; the Dockerfile listens on it via Next standalone.
 
