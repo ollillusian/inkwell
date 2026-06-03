@@ -56,3 +56,62 @@ How it should sound:
 }
 
 export const PLAIN_SPEECH_USER_REMINDER = `Voice check: Would a tired, smart friend actually say this out loud? If it sounds written-for-Instagram or like a therapy worksheet, rewrite simpler.`;
+
+/**
+ * Clinical / diagnostic terms the INVISIBLE hypothesis engine must never speak to the user. Used as
+ * a HARD output gate in generateHypothesisNudge (the existing soft LITERARY_OR_THERAPY_WORDS list is
+ * only fed to the model as advice and is not enforced). A hypothesis biases which open question gets
+ * asked — it is never allowed to name a label. See HYPOTHESIS_NUDGE_ENGINE.md §7.3.
+ */
+export const CLINICAL_TERMS_BANNED = [
+  "schema",
+  "attachment",
+  "attachment style",
+  "core belief",
+  "cognitive distortion",
+  "distortion",
+  "catastrophizing",
+  "catastrophize",
+  "avoidant",
+  "anxious attachment",
+  "maladaptive",
+  "self-sabotage",
+  "worthless",
+  "unlovable",
+  "helpless",
+  "depression",
+  "depressed",
+  "disorder",
+  "trauma",
+  "triggered",
+  "diagnosis",
+];
+
+/**
+ * Stem patterns for higher-risk terms, so inflected/derived forms can't slip past the whole-word
+ * list (e.g. "self-sabotaging", "catastrophic", "avoidance", "traumatized", "depressive").
+ * Hyphens/spaces are normalized before matching.
+ */
+const CLINICAL_STEM_PATTERNS = [
+  /self[-\s]?sabotag/, // sabotage / sabotaging
+  /catastroph/, // catastrophic / catastrophize / catastrophizing
+  /avoidan/, // avoidant / avoidance
+  /traumati/, // traumatic / traumatized / traumatised
+  /depress/, // depressed / depression / depressive
+  /\bruminat/, // ruminate / rumination
+  /dissociat/, // dissociate / dissociation
+  /pathologi/, // pathology / pathologize
+  /maladaptiv/, // maladaptive
+];
+
+/** True if the text contains any banned clinical term (whole-word) or clinical stem. */
+export function containsBannedClinicalTerm(text: string): boolean {
+  const lower = text.toLowerCase();
+  const literal = CLINICAL_TERMS_BANNED.some((term) => {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`\\b${escaped}\\b`).test(lower);
+  });
+  if (literal) return true;
+  const normalized = lower.replace(/[-\s]+/g, " ");
+  return CLINICAL_STEM_PATTERNS.some((re) => re.test(lower) || re.test(normalized));
+}

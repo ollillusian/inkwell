@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { tuningParams } from "@/lib/llm/chatParams";
 import { formatLocalTime } from "@/lib/datetime";
 import { sanitizeStoryProse } from "@/lib/storyFormat";
 import type { JournalPeriodType } from "@/lib/journalPeriod";
@@ -11,7 +12,7 @@ import type { StoryEntryInput } from "@/lib/llm/generateDayStory";
 function openaiClient(): OpenAI | null {
   const key = process.env.OPENAI_API_KEY;
   if (!key) return null;
-  return new OpenAI({ apiKey: key });
+  return new OpenAI({ apiKey: key, baseURL: process.env.OPENAI_BASE_URL || undefined });
 }
 
 function periodInstructions(period: JournalPeriodType): {
@@ -76,11 +77,11 @@ ${e.body.trim()}`;
   const voiceBrief = buildVoiceBrief(voice);
   const maxTokens = period === "month" ? 2200 : period === "week" ? 1800 : 1200;
 
+  const model = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
   try {
     const response = await client.chat.completions.create({
-      model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
-      temperature: 0.75,
-      max_tokens: maxTokens,
+      model,
+      ...tuningParams(model, { maxTokens, temperature: 0.75 }),
       messages: [
         {
           role: "system",

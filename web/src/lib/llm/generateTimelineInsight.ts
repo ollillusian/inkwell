@@ -1,10 +1,11 @@
 import OpenAI from "openai";
+import { tuningParams } from "@/lib/llm/chatParams";
 import type { ThemeTimelineGranularity } from "@/lib/themeTimeline";
 
 function openaiClient(): OpenAI | null {
   const key = process.env.OPENAI_API_KEY;
   if (!key) return null;
-  return new OpenAI({ apiKey: key });
+  return new OpenAI({ apiKey: key, baseURL: process.env.OPENAI_BASE_URL || undefined });
 }
 
 export type TimelineFrameInsightInput = {
@@ -42,10 +43,10 @@ export async function generateFrameInsightWithLLM(
       : "";
 
   try {
+    const model = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
     const response = await client.chat.completions.create({
-      model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
-      temperature: 0.65,
-      max_tokens: 120,
+      model,
+      ...tuningParams(model, { maxTokens: 120, temperature: 0.65 }),
       messages: [
         {
           role: "system",
@@ -80,10 +81,10 @@ export async function generateDirectorsCutWithLLM(
   if (!client) return null;
 
   try {
+    const model = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
     const response = await client.chat.completions.create({
-      model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
-      temperature: 0.7,
-      max_tokens: 280,
+      model,
+      ...tuningParams(model, { maxTokens: 280, temperature: 0.7 }),
       messages: [
         {
           role: "system",

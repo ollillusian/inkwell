@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { tuningParams } from "@/lib/llm/chatParams";
 import { formatLocalNowForLLM } from "@/lib/datetime";
 import { TOPICS, type TopicId } from "@/lib/promptEngine";
 import type { NudgeKind } from "@/lib/nudges";
@@ -17,7 +18,7 @@ import {
 function openaiClient(): OpenAI | null {
   const key = process.env.OPENAI_API_KEY;
   if (!key) return null;
-  return new OpenAI({ apiKey: key });
+  return new OpenAI({ apiKey: key, baseURL: process.env.OPENAI_BASE_URL || undefined });
 }
 
 export type GeneratePromptOptions = {
@@ -71,14 +72,17 @@ export async function generatePromptWithLLM(
 
   const highVariety = options.highVariety ?? false;
 
+  const model = process.env.OPENAI_MODEL ?? "gpt-4o-mini";
   try {
     const response = await client.chat.completions.create({
-      model: process.env.OPENAI_MODEL ?? "gpt-4o-mini",
-      temperature: highVariety ? 0.92 : 0.78,
-      top_p: highVariety ? 0.9 : 0.85,
-      frequency_penalty: highVariety ? 0.5 : 0.35,
-      presence_penalty: highVariety ? 0.35 : 0.2,
-      max_tokens: 120,
+      model,
+      ...tuningParams(model, {
+        maxTokens: 120,
+        temperature: highVariety ? 0.92 : 0.78,
+        topP: highVariety ? 0.9 : 0.85,
+        frequencyPenalty: highVariety ? 0.5 : 0.35,
+        presencePenalty: highVariety ? 0.35 : 0.2,
+      }),
       messages: [
         { role: "system", content: systemPromptForVoice(context.voice) },
         {

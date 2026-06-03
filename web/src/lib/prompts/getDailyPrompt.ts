@@ -5,12 +5,15 @@ import { formatMinutesLocal } from "@/lib/datetime";
 import { pickPrompt, type TopicId } from "@/lib/promptEngine";
 import type { NudgeKind } from "@/lib/nudges";
 import { isOnDemandPromptId } from "@/lib/prompts/onDemandPrompt";
+import { isHypothesisPromptId } from "@/lib/prompts/hypothesisPrompt";
+import { composeHypothesisNudge } from "@/lib/hypotheses/composeNudge";
+import { createPendingOutcome } from "@/lib/hypotheses/outcomeInstrument";
 import type { WritingPreferences } from "@/lib/writingVoice";
 
 export type DailyPromptResult = {
   prompt: string;
   deliveryDate: string;
-  source: "llm" | "cache" | "fallback";
+  source: "llm" | "cache" | "fallback" | "hypothesis";
 };
 
 export type GetDailyPromptOptions = {
@@ -79,9 +82,24 @@ export async function getDailyPrompt(
     };
   }
 
+  // HYPOTHESIS-FIRST: every nudge tries to be informed by the engine's understanding of this user.
+  // (The async loop also pre-generates into the `day` slot, served by the cache read above; this is
+  // the live path for every other slot — on-demand, surprise, bedtime, etc.) Falls through to the
+  // generic generator below when there's no usable hypothesis yet (cold start / sparse journal).
+  const composed = await composeHypothesisNudge(userId, nudgeContext.voice);
+  if (composed?.text) {
+    await supabase.from("prompt_deliveries").upsert(
+      { user_id: userId, delivery_date: deliveryDate, prompt_slot: nudgeId, prompt_text: composed.text },
+      { onConflict: "user_id,delivery_date,prompt_slot" }
+    );
+    await createPendingOutcome(userId, composed.hypothesisId, nudgeId, deliveryDate);
+    return { prompt: composed.text, deliveryDate, source: "hypothesis" };
+  }
+
   const highVariety =
     options.highVariety ??
     (isOnDemandPromptId(nudgeId) ||
+      isHypothesisPromptId(nudgeId) ||
       nudgeId === "surprise" ||
       nudgeContext.kind === "once");
 

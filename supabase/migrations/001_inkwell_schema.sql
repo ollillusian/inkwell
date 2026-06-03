@@ -16,7 +16,10 @@ create table public.profiles (
   updated_at timestamptz not null default now()
 );
 
--- Journal entries (your words only — never sent to any LLM)
+-- Journal entries.
+-- NOTE: as of migration 009, published entry text IS sent to an LLM (OpenAI) by the async
+-- hypothesis-evidence extractor (web/src/lib/llm/extractEvidence.ts) and the embedding job (010).
+-- Quotes stored in hypothesis_evidence are named-entity-redacted first. See HYPOTHESIS_NUDGE_ENGINE.md.
 create table public.entries (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
